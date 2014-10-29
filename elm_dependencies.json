@@ -1,0 +1,11 @@
+{
+    "version": "0.0.0",
+    "summary": "dropbox-js bindings for Elm",
+    "description": "dropbox-js bindings for Elm",
+    "license": "MIT",
+    "exposed-modules": ["Dropbox"],
+    "native-modules": ["Native.Dropbox"],
+    "elm-version": "0.13.0",
+    "dependencies": {},
+    "repository": "https://github.com/avh4/elm-dropbox.git"
+}
