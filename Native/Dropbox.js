@@ -6,10 +6,8 @@ Elm.Native.Dropbox.make = function(elm) {
 
   // Imports
   var Signal = Elm.Native.Signal.make(elm);
-  
-  function read(apiKey, filename) {
-    var output = Signal.constant("");
 
+  function client(apiKey) {
     var client = new Dropbox.Client({ key: apiKey });
 
     client.authenticate(function(error, client) {
@@ -17,19 +15,45 @@ Elm.Native.Dropbox.make = function(elm) {
         return alert(error);
       }
       console.log("elm-dropbox: Dropbox is authorized");
+    });
+
+    function read(filename) {
+      var output = Signal.constant("");
+
       client.readFile(filename, function(error, data) {
         if (error) {
           return alert(error);
         }
-        console.log("elm-dropbox: Read " + filename + " from Dropbox");
+        console.log("elm-dropbox: " + filename + ": Read from Dropbox");
         elm.notify(output.id, data);
       });
-    });
 
-    return output;
+      return output;
+    }
+
+    function write(filename, dataSignal) {
+      var isFirst = true;
+      var writeToken = null;
+      var handler = function(data) {
+        if (isFirst) return isFirst = false;
+        console.log("elm-dropbox: " + filename + ": Writing...", data.slice(0, 100));
+        if (writeToken) clearTimeout(writeToken);
+        writeToken = setTimeout(function() {
+          client.writeFile(filename, data, function(error, stat) {
+            if (error) {
+              return alert(error);
+            }
+            console.log("elm-dropbox: " + filename + ": Wrote revision " + stat.versionTag);
+          });
+        }, 5000);
+      }
+      Signal.lift(handler)(dataSignal);
+    }
+
+    return { read: read, write: F2(write) };
   }
 
   return elm.Native.Dropbox.values = {
-    read: F2(read)
+    client: client
   };
 };

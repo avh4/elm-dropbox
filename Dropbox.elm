@@ -1,7 +1,11 @@
-module Dropbox (read) where
+module Dropbox (client) where
 
 import Native.Dropbox
 
--- apiKey, filename
-read : String -> String -> Signal String
-read = Native.Dropbox.read
+type Client =
+  { read: String -> Signal String
+  , write: String -> Signal String -> ()
+  }
+
+client : String -> Client
+client = Native.Dropbox.client
