@@ -2,7 +2,7 @@ module Dropbox (client) where
 
 import Native.Dropbox
 
-type Client =
+type alias Client =
   { read: String -> Signal String
   , write: String -> Signal String -> ()
   }

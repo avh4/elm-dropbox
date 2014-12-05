@@ -47,7 +47,7 @@ Elm.Native.Dropbox.make = function(elm) {
           });
         }, 5000);
       }
-      Signal.lift(handler)(dataSignal);
+      Signal.map(handler)(dataSignal);
     }
 
     return { read: read, write: F2(write) };
