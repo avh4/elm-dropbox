@@ -22,7 +22,7 @@ Elm.Native.Dropbox.make = function(elm) {
 
       client.readFile(filename, function(error, data) {
         if (error) {
-          return alert(error);
+          return console.log("elm-dropbox: " + filename + ": " + error);
         }
         console.log("elm-dropbox: " + filename + ": Read from Dropbox");
         elm.notify(output.id, data);
