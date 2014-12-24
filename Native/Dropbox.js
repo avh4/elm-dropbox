@@ -36,7 +36,6 @@ Elm.Native.Dropbox.make = function(elm) {
       var writeToken = null;
       var handler = function(data) {
         if (isFirst) return isFirst = false;
-        console.log("elm-dropbox: " + filename + ": Writing...", data.slice(0, 100));
         if (writeToken) clearTimeout(writeToken);
         writeToken = setTimeout(function() {
           client.writeFile(filename, data, function(error, stat) {
