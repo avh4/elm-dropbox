@@ -14,7 +14,7 @@ host = "https://api-content.dropbox.com/1/files_put/auto/test.txt"
 writeFile : Task.Task Http.RawError Http.Response
 writeFile = Http.send Http.defaultSettings
     { verb = "PUT"
-    , headers = []
+    , headers = [("Authorization", "Bearer " ++ authToken)]
     , url = "https://api-content.dropbox.com/1/files_put/auto/test.txt"
     , body = Http.string "Hello"
     }
