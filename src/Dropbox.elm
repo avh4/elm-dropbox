@@ -1,8 +1,12 @@
-module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, download, upload)
+module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, download, program, upload)
 
+import Dict
+import Html exposing (Html)
 import Http
 import Json.Decode
 import Json.Encode
+import Navigation
+import Update.Extra
 
 
 type alias Config =
@@ -32,6 +36,37 @@ authUrl config =
         , "redirect_uri="
         , config.redirectUri
         ]
+
+
+parseAuth : Navigation.Location -> Maybe Auth
+parseAuth location =
+    let
+        isKeyValue list =
+            case list of
+                [ k, v ] ->
+                    Just ( k, v )
+
+                _ ->
+                    Nothing
+
+        makeAuth dict =
+            Maybe.map4 Auth
+                (Dict.get "access_token" dict)
+                (Dict.get "token_type" dict)
+                (Dict.get "uid" dict)
+                (Dict.get "account_id" dict)
+    in
+    case String.uncons location.hash of
+        Just ( '#', hash ) ->
+            hash
+                |> String.split "&"
+                |> List.map (String.split "=")
+                |> List.filterMap isKeyValue
+                |> Dict.fromList
+                |> makeAuth
+
+        _ ->
+            Nothing
 
 
 type alias DownloadResponse =
@@ -107,4 +142,41 @@ upload auth info =
         , expect = Http.expectJson decoder
         , timeout = Nothing
         , withCredentials = False
+        }
+
+
+program :
+    { init : ( model, Cmd msg )
+    , update : msg -> model -> ( model, Cmd msg )
+    , subscriptions : model -> Sub msg
+    , view : model -> Html msg
+    , onAuth : Auth -> msg
+    }
+    -> Program Never model (Maybe msg)
+program config =
+    Navigation.program (always Nothing)
+        { init =
+            \location ->
+                case parseAuth location of
+                    Nothing ->
+                        config.init
+                            |> Update.Extra.mapCmd Just
+
+                    Just auth ->
+                        config.init
+                            |> Update.Extra.andThen
+                                config.update
+                                (config.onAuth auth)
+                            |> Update.Extra.mapCmd Just
+        , update =
+            \msg model ->
+                case msg of
+                    Nothing ->
+                        ( model, Cmd.none )
+
+                    Just m ->
+                        config.update m model
+                            |> Update.Extra.mapCmd Just
+        , subscriptions = \_ -> Sub.none
+        , view = config.view >> Html.map Just
         }

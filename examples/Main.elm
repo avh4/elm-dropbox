@@ -1,6 +1,5 @@
 module Main exposing (..)
 
-import Dict
 import Dropbox
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -38,6 +37,7 @@ initialModel =
 
 type Msg
     = StartAuth
+    | Authed Dropbox.Auth
     | WriteFile
     | ReadFile
     | DebugResult String
@@ -61,6 +61,11 @@ update msg model =
             ( model
             , Navigation.load <|
                 Dropbox.authUrl model.config
+            )
+
+        Authed auth ->
+            ( { model | auth = auth }
+            , Cmd.none
             )
 
         WriteFile ->
@@ -142,59 +147,12 @@ view model =
         ]
 
 
-parseAuth : String -> Maybe Dropbox.Auth
-parseAuth string =
-    let
-        isKeyValue list =
-            case list of
-                [ k, v ] ->
-                    Just ( k, v )
-
-                _ ->
-                    Nothing
-
-        makeAuth dict =
-            Maybe.map4 Dropbox.Auth
-                (Dict.get "access_token" dict)
-                (Dict.get "token_type" dict)
-                (Dict.get "uid" dict)
-                (Dict.get "account_id" dict)
-    in
-    case String.uncons string of
-        Just ( '#', hash ) ->
-            hash
-                |> String.split "&"
-                |> List.map (String.split "=")
-                |> List.filterMap isKeyValue
-                |> Dict.fromList
-                |> makeAuth
-
-        _ ->
-            Nothing
-
-
 main : Program Never Model (Maybe Msg)
 main =
-    Navigation.program (always Nothing)
-        { init =
-            \location ->
-                case parseAuth location.hash of
-                    Nothing ->
-                        ( initialModel, Cmd.none )
-
-                    Just auth ->
-                        ( { initialModel | auth = auth }
-                        , Cmd.none
-                        )
-        , update =
-            \msg model ->
-                case msg of
-                    Nothing ->
-                        ( model, Cmd.none )
-
-                    Just m ->
-                        update m model
-                            |> Tuple.mapSecond (Cmd.map Just)
+    Dropbox.program
+        { init = ( initialModel, Cmd.none )
+        , update = update
         , subscriptions = \_ -> Sub.none
-        , view = view >> Html.map Just
+        , view = view
+        , onAuth = Authed
         }
