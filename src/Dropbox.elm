@@ -1,4 +1,24 @@
-module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, download, program, upload)
+module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, download, program, tokenRevoke, upload)
+
+{-|
+
+
+## Dropbox API
+
+See the official Dropbox documentation at
+<https://www.dropbox.com/developers/documentation/http/documentation>
+
+
+### Auth
+
+@docs tokenRevoke
+
+
+### Files
+
+@docs download, upload
+
+-}
 
 import Dict
 import Html exposing (Html)
@@ -69,6 +89,28 @@ parseAuth location =
             Nothing
 
 
+tokenRevoke : Auth -> Http.Request ()
+tokenRevoke auth =
+    let
+        url =
+            "https://api.dropboxapi.com/2/auth/token/revoke"
+
+        parse response =
+            Ok ()
+    in
+    Http.request
+        { method = "POST"
+        , headers =
+            [ Http.header "Authorization" ("Bearer " ++ auth.accessToken)
+            ]
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectStringResponse parse
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
 type alias DownloadResponse =
     { content : String }
 
@@ -78,9 +120,6 @@ download auth info =
     let
         url =
             "https://content.dropboxapi.com/2/files/download"
-
-        decoder =
-            Json.Decode.succeed {}
 
         parse response =
             Ok { content = response.body }

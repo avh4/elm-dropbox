@@ -45,6 +45,7 @@ type Msg
     | ChangeAppId String
     | ChangeRedirectUrl String
     | ChangeAccessToken String
+    | Logout
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -110,6 +111,12 @@ update msg model =
             , Cmd.none
             )
 
+        Logout ->
+            ( model
+            , Dropbox.tokenRevoke model.auth
+                |> Http.send (toString >> DebugResult)
+            )
+
 
 view : Model -> Html Msg
 view model =
@@ -139,6 +146,10 @@ view model =
                 , button
                     [ onClick ReadFile ]
                     [ text "Read" ]
+                , hr [] []
+                , button
+                    [ onClick Logout ]
+                    [ text "Log out" ]
                 ]
           else
             text ""
