@@ -15,7 +15,7 @@ type alias Model =
     , writeFilename : String
     , writeContent : String
     , config : Dropbox.Config
-    , auth : Dropbox.Auth
+    , auth : Maybe Dropbox.Auth
     }
 
 
@@ -28,25 +28,19 @@ initialModel location =
         Dropbox.configFromLocation
             "CLIENT_ID"
             location
-    , auth =
-        { accessToken = ""
-        , tokenType = ""
-        , uid = ""
-        , accountId = ""
-        }
+    , auth = Nothing
     }
 
 
 type Msg
     = StartAuth
     | Authed Dropbox.Auth
-    | WriteFile
-    | ReadFile
+    | WriteFile Dropbox.Auth
+    | ReadFile Dropbox.Auth
     | DebugResult String
     | ChangeWriteFilename String
     | ChangeAppId String
-    | ChangeAccessToken String
-    | Logout
+    | Logout Dropbox.Auth
     | LogoutResponse (Result Http.Error ())
 
 
@@ -67,22 +61,22 @@ update msg model =
             )
 
         Authed auth ->
-            ( { model | auth = auth }
+            ( { model | auth = Just auth }
             , Cmd.none
             )
 
-        WriteFile ->
+        WriteFile auth ->
             ( model
-            , Dropbox.upload model.auth
+            , Dropbox.upload auth
                 { filename = model.writeFilename
                 , content = "HELLO."
                 }
                 |> Http.send (toString >> DebugResult)
             )
 
-        ReadFile ->
+        ReadFile auth ->
             ( model
-            , Dropbox.download model.auth
+            , Dropbox.download auth
                 { filename = model.writeFilename
                 }
                 |> Http.send (toString >> DebugResult)
@@ -103,26 +97,14 @@ update msg model =
             , Cmd.none
             )
 
-        ChangeAccessToken token ->
-            ( { model | auth = { auth | accessToken = token } }
-            , Cmd.none
-            )
-
-        Logout ->
+        Logout auth ->
             ( model
-            , Dropbox.tokenRevoke model.auth
+            , Dropbox.tokenRevoke auth
                 |> Http.send LogoutResponse
             )
 
         LogoutResponse (Ok ()) ->
-            ( { model
-                | auth =
-                    { accessToken = ""
-                    , tokenType = ""
-                    , uid = ""
-                    , accountId = ""
-                    }
-              }
+            ( { model | auth = Nothing }
             , Cmd.none
             )
 
@@ -141,29 +123,32 @@ view model =
             [ text "Auth" ]
         , code []
             [ text <| Dropbox.authUrl model.config ]
-        , input [ onInput ChangeAccessToken, defaultValue model.auth.accessToken ] []
         , hr [] []
-        , if model.auth.accessToken /= "" then
-            section []
-                [ input
-                    [ onInput ChangeWriteFilename
-                    , defaultValue model.writeFilename
+        , code [] [ text <| toString model.auth ]
+        , hr [] []
+        , case model.auth of
+            Just auth ->
+                section []
+                    [ input
+                        [ onInput ChangeWriteFilename
+                        , defaultValue model.writeFilename
+                        ]
+                        []
+                    , button
+                        [ onClick (WriteFile auth) ]
+                        [ text "Write" ]
+                    , hr [] []
+                    , button
+                        [ onClick (ReadFile auth) ]
+                        [ text "Read" ]
+                    , hr [] []
+                    , button
+                        [ onClick (Logout auth) ]
+                        [ text "Log out" ]
                     ]
-                    []
-                , button
-                    [ onClick WriteFile ]
-                    [ text "Write" ]
-                , hr [] []
-                , button
-                    [ onClick ReadFile ]
-                    [ text "Read" ]
-                , hr [] []
-                , button
-                    [ onClick Logout ]
-                    [ text "Log out" ]
-                ]
-          else
-            text ""
+
+            Nothing ->
+                text ""
         , code []
             [ text model.debug ]
         ]
