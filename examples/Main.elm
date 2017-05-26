@@ -1,5 +1,7 @@
 module Main exposing (..)
 
+import BeautifulExample
+import Color
 import Dropbox
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -157,6 +159,16 @@ main =
         { init = \location -> ( initialModel location, Cmd.none )
         , update = update
         , subscriptions = \_ -> Sub.none
-        , view = view
+        , view =
+            view
+                >> BeautifulExample.view
+                    { title = "elm-dropbox"
+                    , details =
+                        Just """Unofficial Dropbox API for Elm."""
+                    , color = Just Color.lightBlue
+                    , maxWidth = 600
+                    , githubUrl = Just "https://github.com/avh4/elm-dropbox"
+                    , documentationUrl = Nothing
+                    }
         , onAuth = Authed
         }
