@@ -47,6 +47,7 @@ type Msg
     | ChangeAppId String
     | ChangeAccessToken String
     | Logout
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -110,8 +111,23 @@ update msg model =
         Logout ->
             ( model
             , Dropbox.tokenRevoke model.auth
-                |> Http.send (toString >> DebugResult)
+                |> Http.send LogoutResponse
             )
+
+        LogoutResponse (Ok ()) ->
+            ( { model
+                | auth =
+                    { accessToken = ""
+                    , tokenType = ""
+                    , uid = ""
+                    , accountId = ""
+                    }
+              }
+            , Cmd.none
+            )
+
+        LogoutResponse (Err err) ->
+            update (DebugResult <| toString <| Err err) model
 
 
 view : Model -> Html Msg
