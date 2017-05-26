@@ -1,4 +1,4 @@
-module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, download, program, tokenRevoke, upload)
+module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, configFromLocation, download, program, tokenRevoke, upload)
 
 {-|
 
@@ -32,6 +32,21 @@ import Update.Extra
 type alias Config =
     { clientId : String
     , redirectUri : String
+    }
+
+
+{-| Create a `Config` from a `Navigation.Location`. This can be used
+with `Navigation.program` to automatically generate the redirectUri from the
+current page's URL.
+-}
+configFromLocation : String -> Navigation.Location -> Config
+configFromLocation clientId location =
+    { clientId = clientId
+    , redirectUri =
+        location.protocol
+            ++ "//"
+            ++ location.host
+            ++ location.pathname
     }
 
 
@@ -185,7 +200,7 @@ upload auth info =
 
 
 program :
-    { init : ( model, Cmd msg )
+    { init : Navigation.Location -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
@@ -198,11 +213,11 @@ program config =
             \location ->
                 case parseAuth location of
                     Nothing ->
-                        config.init
+                        config.init location
                             |> Update.Extra.mapCmd Just
 
                     Just auth ->
-                        config.init
+                        config.init location
                             |> Update.Extra.andThen
                                 config.update
                                 (config.onAuth auth)

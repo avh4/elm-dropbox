@@ -17,15 +17,15 @@ type alias Model =
     }
 
 
-initialModel : Model
-initialModel =
+initialModel : Navigation.Location -> Model
+initialModel location =
     { debug = ""
     , writeFilename = "/elm-dropbox-test.txt"
     , writeContent = ""
     , config =
-        { clientId = ""
-        , redirectUri = ""
-        }
+        Dropbox.configFromLocation
+            "CLIENT_ID"
+            location
     , auth =
         { accessToken = ""
         , tokenType = ""
@@ -43,7 +43,6 @@ type Msg
     | DebugResult String
     | ChangeWriteFilename String
     | ChangeAppId String
-    | ChangeRedirectUrl String
     | ChangeAccessToken String
     | Logout
 
@@ -101,11 +100,6 @@ update msg model =
             , Cmd.none
             )
 
-        ChangeRedirectUrl url ->
-            ( { model | config = { config | redirectUri = url } }
-            , Cmd.none
-            )
-
         ChangeAccessToken token ->
             ( { model | auth = { auth | accessToken = token } }
             , Cmd.none
@@ -123,7 +117,6 @@ view model =
     div []
         [ h2 [] [ text "Dropbox.Config" ]
         , input [ onInput ChangeAppId, defaultValue model.config.clientId ] []
-        , input [ onInput ChangeRedirectUrl, defaultValue model.config.redirectUri ] []
         , hr [] []
         , button
             [ onClick StartAuth ]
@@ -161,7 +154,7 @@ view model =
 main : Program Never Model (Maybe Msg)
 main =
     Dropbox.program
-        { init = ( initialModel, Cmd.none )
+        { init = \location -> ( initialModel location, Cmd.none )
         , update = update
         , subscriptions = \_ -> Sub.none
         , view = view
