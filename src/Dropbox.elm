@@ -319,8 +319,10 @@ type MediaInfo
 
 decodeMediaInfo : Json.Decode.Decoder MediaInfo
 decodeMediaInfo =
-    -- TODO
-    Json.Decode.succeed Pending
+    decodeUnion ".tag"
+        [ ( "pending", Json.Decode.succeed Pending )
+        , ( "metadata", Json.Decode.field "metadata" <| Json.Decode.map Metadata decodeMediaMetadata )
+        ]
 
 
 {-| Metadata for a photo or video.
@@ -333,6 +335,14 @@ type MediaMetadata
     | Video VideoMetadata
 
 
+decodeMediaMetadata : Json.Decode.Decoder MediaMetadata
+decodeMediaMetadata =
+    decodeUnion ".tag"
+        [ ( "photo", Json.Decode.field "photo" <| Json.Decode.map Photo decodePhotoMetadata )
+        , ( "video", Json.Decode.field "video" <| Json.Decode.map Video decodeVideoMetadata )
+        ]
+
+
 {-| Metadata for a photo.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -343,6 +353,19 @@ type alias PhotoMetadata =
     , location : Maybe GpsCoordinates
     , timeTaken : Maybe Date
     }
+
+
+optional : String -> Json.Decode.Decoder a -> Json.Decode.Decoder (Maybe a -> b) -> Json.Decode.Decoder b
+optional field decoder =
+    Pipeline.optional field (Json.Decode.nullable decoder) Nothing
+
+
+decodePhotoMetadata : Json.Decode.Decoder PhotoMetadata
+decodePhotoMetadata =
+    Pipeline.decode PhotoMetadata
+        |> optional "dimensions" decodeDimensions
+        |> optional "location" decodeGpsCoordinates
+        |> optional "time_taken" Json.Decode.Extra.date
 
 
 {-| Metadata for a video.
@@ -361,6 +384,15 @@ type alias VideoMetadata =
     }
 
 
+decodeVideoMetadata : Json.Decode.Decoder VideoMetadata
+decodeVideoMetadata =
+    Pipeline.decode VideoMetadata
+        |> optional "dimensions" decodeDimensions
+        |> optional "location" decodeGpsCoordinates
+        |> optional "time_taken" Json.Decode.Extra.date
+        |> optional "duration" Json.Decode.int
+
+
 {-| Dimensions for a photo or video.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -375,6 +407,13 @@ type alias Dimensions =
     }
 
 
+decodeDimensions : Json.Decode.Decoder Dimensions
+decodeDimensions =
+    Pipeline.decode Dimensions
+        |> Pipeline.required "height" Json.Decode.int
+        |> Pipeline.required "width" Json.Decode.int
+
+
 {-| The GPS coordinate of the photo/video.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -384,6 +423,13 @@ type alias GpsCoordinates =
     { latitude : Float
     , longitude : Float
     }
+
+
+decodeGpsCoordinates : Json.Decode.Decoder GpsCoordinates
+decodeGpsCoordinates =
+    Pipeline.decode GpsCoordinates
+        |> Pipeline.required "latitude" Json.Decode.float
+        |> Pipeline.required "longitude" Json.Decode.float
 
 
 {-| Sharing info for a file which is contained by a shared folder.
