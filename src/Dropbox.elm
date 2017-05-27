@@ -58,6 +58,7 @@ import Dict exposing (Dict)
 import Html exposing (Html)
 import Http
 import Json.Decode
+import Json.Decode.Dropbox exposing (optional)
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
@@ -355,11 +356,6 @@ type alias PhotoMetadata =
     }
 
 
-optional : String -> Json.Decode.Decoder a -> Json.Decode.Decoder (Maybe a -> b) -> Json.Decode.Decoder b
-optional field decoder =
-    Pipeline.optional field (Json.Decode.nullable decoder) Nothing
-
-
 decodePhotoMetadata : Json.Decode.Decoder PhotoMetadata
 decodePhotoMetadata =
     Pipeline.decode PhotoMetadata
@@ -449,7 +445,7 @@ decodeFileSharingInfo =
     Pipeline.decode FileSharingInfo
         |> Pipeline.required "read_only" Json.Decode.bool
         |> Pipeline.required "parent_shared_folder_id" Json.Decode.string
-        |> Pipeline.optional "modified_by" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> optional "modified_by" Json.Decode.string
 
 
 {-| Collection of custom properties in filled property templates.
@@ -509,14 +505,14 @@ decodeUploadResponse =
         |> Pipeline.required "server_modified" Json.Decode.Extra.date
         |> Pipeline.required "rev" Json.Decode.string
         |> Pipeline.required "size" Json.Decode.int
-        |> Pipeline.optional "path_lower" (Json.Decode.nullable Json.Decode.string) Nothing
-        |> Pipeline.optional "path_display" (Json.Decode.nullable Json.Decode.string) Nothing
-        |> Pipeline.optional "parent_shared_folder_id" (Json.Decode.nullable Json.Decode.string) Nothing
-        |> Pipeline.optional "media_info" (Json.Decode.nullable decodeMediaInfo) Nothing
-        |> Pipeline.optional "sharing_info" (Json.Decode.nullable decodeFileSharingInfo) Nothing
-        |> Pipeline.optional "property_groups" (Json.Decode.nullable <| Json.Decode.list decodePropertyGroup) Nothing
-        |> Pipeline.optional "has_explicit_shared_members" (Json.Decode.nullable Json.Decode.bool) Nothing
-        |> Pipeline.optional "content_hash" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> optional "path_lower" Json.Decode.string
+        |> optional "path_display" Json.Decode.string
+        |> optional "parent_shared_folder_id" Json.Decode.string
+        |> optional "media_info" decodeMediaInfo
+        |> optional "sharing_info" decodeFileSharingInfo
+        |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
+        |> optional "has_explicit_shared_members" Json.Decode.bool
+        |> optional "content_hash" Json.Decode.string
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
