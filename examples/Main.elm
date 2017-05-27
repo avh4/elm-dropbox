@@ -8,6 +8,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Navigation
+import Task
 
 
 type alias Model =
@@ -73,7 +74,7 @@ update msg model =
                 , mute = False
                 , content = "HELLO."
                 }
-                |> Http.send (toString >> DebugResult)
+                |> Task.attempt (toString >> DebugResult)
             )
 
         ReadFile auth ->

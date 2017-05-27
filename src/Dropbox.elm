@@ -62,6 +62,7 @@ import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 import Navigation
+import Task exposing (Task)
 import Update.Extra
 
 
@@ -472,12 +473,111 @@ decodeUploadResponse =
         |> Pipeline.optional "content_hash" (Json.Decode.nullable Json.Decode.string) Nothing
 
 
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+-}
+type UploadError
+    = Path UploadWriteFailed
+    | OtherUploadError String Json.Encode.Value
+    | OtherUploadFailure Http.Error
+
+
+decodeOpenUnion : String -> List ( String, Json.Decode.Decoder a ) -> (String -> Json.Decode.Decoder a) -> Json.Decode.Decoder a
+decodeOpenUnion typeField types unknown =
+    let
+        decoders =
+            Dict.fromList types
+    in
+    Json.Decode.field typeField Json.Decode.string
+        |> Json.Decode.andThen
+            (\type_ ->
+                Dict.get type_ decoders
+                    |> Maybe.withDefault (unknown type_)
+            )
+
+
+decodeUnion : String -> List ( String, Json.Decode.Decoder a ) -> Json.Decode.Decoder a
+decodeUnion typeField types =
+    let
+        onFail type_ =
+            Json.Decode.fail ("Unexpected " ++ typeField ++ ": " ++ type_)
+    in
+    decodeOpenUnion typeField types onFail
+
+
+decodeUploadError : Json.Decode.Decoder UploadError
+decodeUploadError =
+    Json.Decode.field "error" <|
+        decodeOpenUnion ".tag"
+            [ ( "path", Json.Decode.map Path decodeUploadWriteFailed )
+            ]
+            (\type_ -> Json.Decode.map (OtherUploadError type_) Json.Decode.value)
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+-}
+type alias UploadWriteFailed =
+    { reason : WriteError
+    , uploadSessionId : String
+    }
+
+
+decodeUploadWriteFailed : Json.Decode.Decoder UploadWriteFailed
+decodeUploadWriteFailed =
+    Pipeline.decode UploadWriteFailed
+        |> Pipeline.required "reason" decodeWriteError
+        |> Pipeline.required "upload_session_id" Json.Decode.string
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+-}
+type WriteError
+    = MalformedPath (Maybe String)
+    | Conflict WriteConflictError
+    | NoWritePermission
+    | InsufficientSpace
+    | DisallowedName
+    | TeamFolder
+    | OtherWriteError String Json.Encode.Value
+
+
+decodeWriteError : Json.Decode.Decoder WriteError
+decodeWriteError =
+    decodeOpenUnion ".tag"
+        [ ( "malformed_path", Json.Decode.field "malformed_path" <| Json.Decode.map MalformedPath <| Json.Decode.nullable Json.Decode.string )
+        , ( "conflict", Json.Decode.field "conflict" <| Json.Decode.map Conflict <| decodeWriteConflictError )
+        , ( "no_write_permission", Json.Decode.succeed NoWritePermission )
+        , ( "insufficient_space", Json.Decode.succeed InsufficientSpace )
+        , ( "disallowed_name", Json.Decode.succeed DisallowedName )
+        , ( "team_folder", Json.Decode.succeed TeamFolder )
+        ]
+        (\type_ -> Json.Decode.map (OtherWriteError type_) Json.Decode.value)
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+-}
+type WriteConflictError
+    = File
+    | Folder
+    | FileAncestor
+    | OtherWriteConflictError String Json.Encode.Value
+
+
+decodeWriteConflictError : Json.Decode.Decoder WriteConflictError
+decodeWriteConflictError =
+    decodeOpenUnion ".tag"
+        [ ( "file", Json.Decode.succeed File )
+        , ( "folder", Json.Decode.succeed Folder )
+        , ( "file_ancestor", Json.Decode.succeed FileAncestor )
+        ]
+        (\type_ -> Json.Decode.map (OtherWriteConflictError type_) Json.Decode.value)
+
+
 {-| Create a new file with the contents provided in the request.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
 
 -}
-upload : UserAuth -> UploadRequest -> Http.Request UploadResponse
+upload : UserAuth -> UploadRequest -> Task UploadError UploadResponse
 upload auth info =
     let
         url =
@@ -485,9 +585,6 @@ upload auth info =
 
         body =
             Http.stringBody "application/octet-stream" info.content
-
-        decoder =
-            decodeUploadResponse
 
         dropboxArg =
             Json.Encode.encode 0 <|
@@ -502,6 +599,19 @@ upload auth info =
                             |> Maybe.map ((,) "client_modified")
                         , Just ( "mute", Json.Encode.bool info.mute )
                         ]
+
+        decodeError err =
+            case err of
+                Http.BadStatus response ->
+                    case Json.Decode.decodeString decodeUploadError response.body of
+                        Ok err ->
+                            err
+
+                        Err _ ->
+                            OtherUploadFailure err
+
+                _ ->
+                    OtherUploadFailure err
     in
     Http.request
         { method = "POST"
@@ -511,10 +621,12 @@ upload auth info =
             ]
         , url = url
         , body = body
-        , expect = Http.expectJson decoder
+        , expect = Http.expectJson decodeUploadResponse
         , timeout = Nothing
         , withCredentials = False
         }
+        |> Http.toTask
+        |> Task.mapError decodeError
 
 
 {-| This provides the simplest way to integrate Dropbox authentication.
