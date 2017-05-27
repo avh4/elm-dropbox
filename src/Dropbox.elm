@@ -58,7 +58,7 @@ import Dict exposing (Dict)
 import Html exposing (Html)
 import Http
 import Json.Decode
-import Json.Decode.Dropbox exposing (optional, tagObject, tagValue, tagVoid)
+import Json.Decode.Dropbox exposing (openUnion, optional, tagObject, tagValue, tagVoid, union)
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
@@ -320,7 +320,7 @@ type MediaInfo
 
 decodeMediaInfo : Json.Decode.Decoder MediaInfo
 decodeMediaInfo =
-    decodeUnion ".tag"
+    union
         [ tagVoid "pending" Pending
         , tagValue "metadata" Metadata decodeMediaMetadata
         ]
@@ -338,7 +338,7 @@ type MediaMetadata
 
 decodeMediaMetadata : Json.Decode.Decoder MediaMetadata
 decodeMediaMetadata =
-    decodeUnion ".tag"
+    union
         [ tagObject "photo" Photo decodePhotoMetadata
         , tagObject "video" Video decodeVideoMetadata
         ]
@@ -523,36 +523,12 @@ type UploadError
     | OtherUploadFailure Http.Error
 
 
-decodeOpenUnion : String -> List ( String, Json.Decode.Decoder a ) -> (String -> Json.Decode.Decoder a) -> Json.Decode.Decoder a
-decodeOpenUnion typeField types unknown =
-    let
-        decoders =
-            Dict.fromList types
-    in
-    Json.Decode.field typeField Json.Decode.string
-        |> Json.Decode.andThen
-            (\type_ ->
-                Dict.get type_ decoders
-                    |> Maybe.withDefault (unknown type_)
-            )
-
-
-decodeUnion : String -> List ( String, Json.Decode.Decoder a ) -> Json.Decode.Decoder a
-decodeUnion typeField types =
-    let
-        onFail type_ =
-            Json.Decode.fail ("Unexpected " ++ typeField ++ ": " ++ type_)
-    in
-    decodeOpenUnion typeField types onFail
-
-
 decodeUploadError : Json.Decode.Decoder UploadError
 decodeUploadError =
     Json.Decode.field "error" <|
-        decodeOpenUnion ".tag"
+        openUnion OtherUploadError
             [ tagObject "path" Path decodeUploadWriteFailed
             ]
-            (\type_ -> Json.Decode.map (OtherUploadError type_) Json.Decode.value)
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -584,7 +560,7 @@ type WriteError
 
 decodeWriteError : Json.Decode.Decoder WriteError
 decodeWriteError =
-    decodeOpenUnion ".tag"
+    openUnion OtherWriteError
         [ tagValue "malformed_path" MalformedPath (Json.Decode.nullable Json.Decode.string)
         , tagValue "conflict" Conflict decodeWriteConflictError
         , tagVoid "no_write_permission" NoWritePermission
@@ -592,7 +568,6 @@ decodeWriteError =
         , tagVoid "disallowed_name" DisallowedName
         , tagVoid "team_folder" TeamFolder
         ]
-        (\type_ -> Json.Decode.map (OtherWriteError type_) Json.Decode.value)
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -606,12 +581,11 @@ type WriteConflictError
 
 decodeWriteConflictError : Json.Decode.Decoder WriteConflictError
 decodeWriteConflictError =
-    decodeOpenUnion ".tag"
+    openUnion OtherWriteConflictError
         [ tagVoid "file" File
         , tagVoid "folder" Folder
         , tagVoid "file_ancestor" FileAncestor
         ]
-        (\type_ -> Json.Decode.map (OtherWriteConflictError type_) Json.Decode.value)
 
 
 {-| Create a new file with the contents provided in the request.
