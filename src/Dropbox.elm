@@ -2,7 +2,9 @@ module Dropbox
     exposing
         ( Authorization
         , AuthorizeRequest
+        , DownloadRequest
         , DownloadResponse
+        , UploadRequest
         , UploadResponse
         , authFromLocation
         , authorizationUrl
@@ -34,7 +36,8 @@ See the official Dropbox documentation at
 
 ### Files
 
-@docs download, upload
+@docs download, DownloadRequest, DownloadResponse
+@docs upload, UploadRequest, UploadResponse
 
 -}
 
@@ -194,11 +197,26 @@ tokenRevoke auth =
         }
 
 
+{-| Request parameteres for `download`
+-}
+type alias DownloadRequest =
+    { filename : String
+    }
+
+
+{-| Return value for `download`
+-}
 type alias DownloadResponse =
-    { content : String }
+    { content : String
+    }
 
 
-download : Authorization -> { filename : String } -> Http.Request DownloadResponse
+{-| Download a file from a user's Dropbox.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
+
+-}
+download : Authorization -> DownloadRequest -> Http.Request DownloadResponse
 download auth info =
     let
         url =
@@ -226,16 +244,25 @@ download auth info =
         }
 
 
-type alias UploadResponse =
-    {}
-
-
+{-| Request parameters for `upload`
+-}
 type alias UploadRequest =
     { filename : String
     , content : String
     }
 
 
+{-| Return value for `upload`
+-}
+type alias UploadResponse =
+    {}
+
+
+{-| Create a new file with the contents provided in the request.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+
+-}
 upload : Authorization -> UploadRequest -> Http.Request UploadResponse
 upload auth info =
     let
