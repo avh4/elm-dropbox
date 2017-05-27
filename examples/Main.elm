@@ -172,6 +172,11 @@ startAuth =
                 , code [] [ text <| toString model.auth ]
                 ]
             , h3 [] [ text "Step 3: Use the API" ]
+            , p []
+                [ text "For details on the API calls, see the "
+                , a [ href "https://www.dropbox.com/developers/documentation/http/documentation" ]
+                    [ text "Dropbox API v2 documentation" ]
+                ]
             , h4 [] [ text "files/upload" ]
             , input
                 [ onInput ChangeWriteFilename
