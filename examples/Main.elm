@@ -225,7 +225,7 @@ main =
                     , color = Just Color.lightBlue
                     , maxWidth = 600
                     , githubUrl = Just "https://github.com/avh4/elm-dropbox"
-                    , documentationUrl = Nothing
+                    , documentationUrl = Just "http://package.elm-lang.org/packages/avh4/elm-dropbox/latest"
                     }
         , onAuth = Authed
         }
