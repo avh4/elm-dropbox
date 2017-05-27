@@ -58,7 +58,7 @@ import Dict exposing (Dict)
 import Html exposing (Html)
 import Http
 import Json.Decode
-import Json.Decode.Dropbox exposing (optional)
+import Json.Decode.Dropbox exposing (optional, tagObject, tagValue, tagVoid)
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
@@ -321,8 +321,8 @@ type MediaInfo
 decodeMediaInfo : Json.Decode.Decoder MediaInfo
 decodeMediaInfo =
     decodeUnion ".tag"
-        [ ( "pending", Json.Decode.succeed Pending )
-        , ( "metadata", Json.Decode.field "metadata" <| Json.Decode.map Metadata decodeMediaMetadata )
+        [ tagVoid "pending" Pending
+        , tagValue "metadata" Metadata decodeMediaMetadata
         ]
 
 
@@ -339,8 +339,8 @@ type MediaMetadata
 decodeMediaMetadata : Json.Decode.Decoder MediaMetadata
 decodeMediaMetadata =
     decodeUnion ".tag"
-        [ ( "photo", Json.Decode.field "photo" <| Json.Decode.map Photo decodePhotoMetadata )
-        , ( "video", Json.Decode.field "video" <| Json.Decode.map Video decodeVideoMetadata )
+        [ tagObject "photo" Photo decodePhotoMetadata
+        , tagObject "video" Video decodeVideoMetadata
         ]
 
 
@@ -550,7 +550,7 @@ decodeUploadError : Json.Decode.Decoder UploadError
 decodeUploadError =
     Json.Decode.field "error" <|
         decodeOpenUnion ".tag"
-            [ ( "path", Json.Decode.map Path decodeUploadWriteFailed )
+            [ tagObject "path" Path decodeUploadWriteFailed
             ]
             (\type_ -> Json.Decode.map (OtherUploadError type_) Json.Decode.value)
 
@@ -585,12 +585,12 @@ type WriteError
 decodeWriteError : Json.Decode.Decoder WriteError
 decodeWriteError =
     decodeOpenUnion ".tag"
-        [ ( "malformed_path", Json.Decode.field "malformed_path" <| Json.Decode.map MalformedPath <| Json.Decode.nullable Json.Decode.string )
-        , ( "conflict", Json.Decode.field "conflict" <| Json.Decode.map Conflict <| decodeWriteConflictError )
-        , ( "no_write_permission", Json.Decode.succeed NoWritePermission )
-        , ( "insufficient_space", Json.Decode.succeed InsufficientSpace )
-        , ( "disallowed_name", Json.Decode.succeed DisallowedName )
-        , ( "team_folder", Json.Decode.succeed TeamFolder )
+        [ tagValue "malformed_path" MalformedPath (Json.Decode.nullable Json.Decode.string)
+        , tagValue "conflict" Conflict decodeWriteConflictError
+        , tagVoid "no_write_permission" NoWritePermission
+        , tagVoid "insufficient_space" InsufficientSpace
+        , tagVoid "disallowed_name" DisallowedName
+        , tagVoid "team_folder" TeamFolder
         ]
         (\type_ -> Json.Decode.map (OtherWriteError type_) Json.Decode.value)
 
@@ -607,9 +607,9 @@ type WriteConflictError
 decodeWriteConflictError : Json.Decode.Decoder WriteConflictError
 decodeWriteConflictError =
     decodeOpenUnion ".tag"
-        [ ( "file", Json.Decode.succeed File )
-        , ( "folder", Json.Decode.succeed Folder )
-        , ( "file_ancestor", Json.Decode.succeed FileAncestor )
+        [ tagVoid "file" File
+        , tagVoid "folder" Folder
+        , tagVoid "file_ancestor" FileAncestor
         ]
         (\type_ -> Json.Decode.map (OtherWriteConflictError type_) Json.Decode.value)
 
