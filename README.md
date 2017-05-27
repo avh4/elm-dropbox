@@ -6,7 +6,7 @@ Unofficial [Dropbox](https://www.dropbox.com) API for [Elm](http://elm-lang.org/
 <https://avh4.github.io/elm-dropbox/>
 
 
-## Authentication
+## Usage
 
 The Dropbox API uses OAuth 2.0 for authentication.
 To authenticate the user, you will need to send them to the approrpiate authentication URL,
@@ -104,7 +104,6 @@ main =
 
 You can now handle the auth response and take the resulting `Dropbox.UserAuth` and use it to make API requests.
 See the [documentation](http://package.elm-lang.org/packages/avh4/elm-dropbox/latest/Dropbox) for the full list of supported API calls.
-You can generally ignore the `Dropbox.AuthorizeResponse` unless you need access to the `state` field.
 Typically you will take the `Dropbox.UserAuth` and store it in your model for later use.
 You may also want to persist it in local storage so that it can be used on future visits to your app.
 
