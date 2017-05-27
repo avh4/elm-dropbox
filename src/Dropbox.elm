@@ -12,6 +12,7 @@ module Dropbox
         , LookupError(..)
         , MediaInfo
         , MediaMetadata
+        , Msg
         , PhotoMetadata
         , PropertyGroup
         , Role(..)
@@ -40,7 +41,7 @@ module Dropbox
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
 
-@docs program
+@docs program, Msg
 
 
 ### Authorization
@@ -829,6 +830,12 @@ upload auth info =
         |> Task.mapError decodeError
 
 
+{-| The message type for an app that uses `Dropbox.program`
+-}
+type Msg msg
+    = Msg (Maybe msg)
+
+
 {-| This provides the simplest way to integrate Dropbox authentication.
 Using `Dropbox.program` will handle parsing the authentication response from the
 authentication redirect so that you don't have to do it manually.
@@ -840,9 +847,9 @@ program :
     , view : model -> Html msg
     , onAuth : Result AuthorizeError ( AuthorizeResponse, Result String UserAuth ) -> msg
     }
-    -> Program Never model (Maybe msg)
+    -> Program Never model (Msg msg)
 program config =
-    Navigation.program (always Nothing)
+    Navigation.program (always <| Msg Nothing)
         { init =
             \location ->
                 case
@@ -851,23 +858,23 @@ program config =
                 of
                     Nothing ->
                         config.init location
-                            |> Update.Extra.mapCmd Just
+                            |> Update.Extra.mapCmd (Msg << Just)
 
                     Just response ->
                         config.init location
                             |> Update.Extra.andThen
                                 config.update
                                 (config.onAuth response)
-                            |> Update.Extra.mapCmd Just
+                            |> Update.Extra.mapCmd (Msg << Just)
         , update =
-            \msg model ->
+            \(Msg msg) model ->
                 case msg of
                     Nothing ->
                         ( model, Cmd.none )
 
                     Just m ->
                         config.update m model
-                            |> Update.Extra.mapCmd Just
+                            |> Update.Extra.mapCmd (Msg << Just)
         , subscriptions = \_ -> Sub.none
-        , view = config.view >> Html.map Just
+        , view = config.view >> Html.map (Msg << Just)
         }

@@ -239,7 +239,7 @@ startAuth =
         |> div []
 
 
-main : Program Never Model (Maybe Msg)
+main : Program Never Model (Dropbox.Msg Msg)
 main =
     Dropbox.program
         { init = \location -> ( initialModel location, Cmd.none )
