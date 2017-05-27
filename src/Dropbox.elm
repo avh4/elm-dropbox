@@ -1,4 +1,17 @@
-module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl, configFromLocation, download, program, tokenRevoke, upload)
+module Dropbox
+    exposing
+        ( Auth
+        , AuthorizeRequest
+        , DownloadResponse
+        , UploadResponse
+        , authFromLocation
+        , authorizationUrl
+        , authorize
+        , download
+        , program
+        , tokenRevoke
+        , upload
+        )
 
 {-|
 
@@ -7,6 +20,11 @@ module Dropbox exposing (Auth, Config, DownloadResponse, UploadResponse, authUrl
 
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
+
+
+### Authorization
+
+@docs AuthorizeRequest, authFromLocation, authorize
 
 
 ### Auth
@@ -29,18 +47,23 @@ import Navigation
 import Update.Extra
 
 
-type alias Config =
+{-| Request parameters for Dropbox OAuth 2.0 authorization requests.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
+
+-}
+type alias AuthorizeRequest =
     { clientId : String
     , redirectUri : String
     }
 
 
-{-| Create a `Config` from a `Navigation.Location`. This can be used
+{-| Create a `AuthorizeRequest` from a `Navigation.Location`. This can be used
 with `Navigation.program` to automatically generate the redirectUri from the
 current page's URL.
 -}
-configFromLocation : String -> Navigation.Location -> Config
-configFromLocation clientId location =
+authFromLocation : String -> Navigation.Location -> AuthorizeRequest
+authFromLocation clientId location =
     { clientId = clientId
     , redirectUri =
         location.protocol
@@ -58,19 +81,34 @@ type alias Auth =
     }
 
 
-authUrl : Config -> String
-authUrl config =
+{-| The Dropbox OAuth 2.0 authorization URL.
+Typically you will just want to use `authorize` instead,
+which will initiate the authorization.
+
+See <https://www.dropbox.com/developers/reference/oauth-guide>
+
+-}
+authorizationUrl : AuthorizeRequest -> String
+authorizationUrl request =
     String.concat
         [ "https://www.dropbox.com/oauth2/authorize"
         , "?"
         , "response_type=token"
         , "&"
         , "client_id="
-        , config.clientId
+        , request.clientId
         , "&"
         , "redirect_uri="
-        , config.redirectUri
+        , request.redirectUri
         ]
+
+
+{-| <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
+-}
+authorize : AuthorizeRequest -> Cmd msg
+authorize request =
+    Navigation.load <|
+        authorizationUrl request
 
 
 parseAuth : Navigation.Location -> Maybe Auth

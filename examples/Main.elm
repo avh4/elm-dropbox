@@ -14,7 +14,8 @@ type alias Model =
     { debug : String
     , writeFilename : String
     , writeContent : String
-    , config : Dropbox.Config
+    , clientId : String
+    , location : Navigation.Location
     , auth : Maybe Dropbox.Auth
     }
 
@@ -24,10 +25,8 @@ initialModel location =
     { debug = ""
     , writeFilename = "/elm-dropbox-test.txt"
     , writeContent = ""
-    , config =
-        Dropbox.configFromLocation
-            "CLIENT_ID"
-            location
+    , clientId = "CLIENT_ID"
+    , location = location
     , auth = Nothing
     }
 
@@ -46,18 +45,13 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        config =
-            model.config
-
-        auth =
-            model.auth
-    in
     case msg of
         StartAuth ->
             ( model
-            , Navigation.load <|
-                Dropbox.authUrl model.config
+            , Dropbox.authFromLocation
+                model.clientId
+                model.location
+                |> Dropbox.authorize
             )
 
         Authed auth ->
@@ -93,7 +87,7 @@ update msg model =
             )
 
         ChangeAppId appId ->
-            ( { model | config = { config | clientId = appId } }
+            ( { model | clientId = appId }
             , Cmd.none
             )
 
@@ -116,13 +110,13 @@ view : Model -> Html Msg
 view model =
     div []
         [ h2 [] [ text "Dropbox.Config" ]
-        , input [ onInput ChangeAppId, defaultValue model.config.clientId ] []
+        , input [ onInput ChangeAppId, defaultValue model.clientId ] []
         , hr [] []
         , button
             [ onClick StartAuth ]
             [ text "Auth" ]
         , code []
-            [ text <| Dropbox.authUrl model.config ]
+            [ text <| Dropbox.authorizationUrl <| Dropbox.authFromLocation model.clientId model.location ]
         , hr [] []
         , code [] [ text <| toString model.auth ]
         , hr [] []
