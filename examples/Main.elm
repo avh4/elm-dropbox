@@ -80,7 +80,7 @@ update msg model =
         ReadFile auth ->
             ( model
             , Dropbox.download auth
-                { filename = model.writeFilename
+                { path = model.writeFilename
                 }
                 |> Http.send (toString >> DebugResult)
             )

@@ -48,7 +48,9 @@ See the official Dropbox documentation at
 ### Files
 
 @docs download, DownloadRequest, DownloadResponse
-@docs upload, UploadRequest, WriteMode, UploadResponse, MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
+@docs upload, UploadRequest, WriteMode, UploadResponse
+
+@docs MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
 
 -}
 
@@ -225,17 +227,59 @@ tokenRevoke auth =
 
 
 {-| Request parameteres for `download`
+
+Note: there is no `rev` field because it is deprecated.
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
+
 -}
 type alias DownloadRequest =
-    { filename : String
+    { path : String
     }
 
 
 {-| Return value for `download`
+
+**WARNING**: elm-dropbox may give the incorrect values for `size`,
+since Elm currently does not provide a way to parse and represent 64-bit integers.
+
 -}
 type alias DownloadResponse =
     { content : String
+    , name : String
+    , id : String
+    , clientModified : Date
+    , serverModified : Date
+    , rev : String
+    , size : Int -- XXX: should be UInt64
+    , pathLower : Maybe String
+    , pathDisplay : Maybe String
+    , parentSharedFolderId : Maybe String
+    , mediaInfo : Maybe MediaInfo
+    , sharingInfo : Maybe FileSharingInfo
+    , propertyGroups : Maybe (List PropertyGroup)
+    , hasExplicitSharedMembers : Maybe Bool
+    , contentHash : Maybe String
     }
+
+
+decodeDownloadResponse : String -> Json.Decode.Decoder DownloadResponse
+decodeDownloadResponse content =
+    Pipeline.decode DownloadResponse
+        |> Pipeline.hardcoded content
+        |> Pipeline.required "name" Json.Decode.string
+        |> Pipeline.required "id" Json.Decode.string
+        |> Pipeline.required "client_modified" Json.Decode.Extra.date
+        |> Pipeline.required "server_modified" Json.Decode.Extra.date
+        |> Pipeline.required "rev" Json.Decode.string
+        |> Pipeline.required "size" Json.Decode.int
+        |> optional "path_lower" Json.Decode.string
+        |> optional "path_display" Json.Decode.string
+        |> optional "parent_shared_folder_id" Json.Decode.string
+        |> optional "media_info" decodeMediaInfo
+        |> optional "sharing_info" decodeFileSharingInfo
+        |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
+        |> optional "has_explicit_shared_members" Json.Decode.bool
+        |> optional "content_hash" Json.Decode.string
 
 
 {-| Download a file from a user's Dropbox.
@@ -250,12 +294,17 @@ download auth info =
             "https://content.dropboxapi.com/2/files/download"
 
         parse response =
-            Ok { content = response.body }
+            case Dict.get "dropbox-api-result" response.headers of
+                Nothing ->
+                    Err "No dropbox-api-result header found"
+
+                Just arg ->
+                    Json.Decode.decodeString (decodeDownloadResponse response.body) arg
 
         dropboxArg =
             Json.Encode.encode 0 <|
                 Json.Encode.object
-                    [ ( "path", Json.Encode.string info.filename ) ]
+                    [ ( "path", Json.Encode.string info.path ) ]
     in
     Http.request
         { method = "POST"
