@@ -2,7 +2,7 @@ module Dropbox
     exposing
         ( AuthorizeError
         , AuthorizeRequest
-        , AuthorizeResponse
+        , AuthorizeResult(..)
         , Dimensions
         , DownloadError(..)
         , DownloadRequest
@@ -46,7 +46,7 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, Role, authorize, AuthorizeResponse, AuthorizeError, UserAuth
+@docs AuthorizeRequest, Role, authorize, AuthorizeResult, AuthorizeError, UserAuth
 @docs authorizationUrl, redirectUriFromLocation
 
 
@@ -109,7 +109,7 @@ type Role
 {-| Return value of the `authorize` endpoint, which is the data Dropbox returns via
 the redirect URL.
 
-You can get the `AuthorizeResponse` by using `Dropbox.program`,
+You can get the `AuthorizeResult` by using `Dropbox.program`,
 or by using `parseAuth` if you need to manually parse the redirect URL.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
@@ -118,15 +118,22 @@ Note: `uid` is not provided because it is deprecated.
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 
 -}
-type alias AuthorizeResponse =
-    { accessToken : String
-    , tokenType : String
-    , accountId : String
-    , state : Maybe String
-    }
+type AuthorizeResult
+    = DropboxAuthorizeErr AuthorizeError
+    | AuthorizeOk
+        { userAuth : UserAuth
+        , accountId : String
+        , state : Maybe String
+        }
+    | UnknownAccessTokenErr
+        { accessToken : String
+        , tokenType : String
+        , accountId : String
+        , state : Maybe String
+        }
 
 
-{-| Return value of the `authorize` endpoint when authentication fails. See `AuthorizeResponse`.
+{-| Return value of the `authorize` endpoint when authentication fails. See `AuthorizeResult`.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 
@@ -208,7 +215,7 @@ authorize request location =
         authorizationUrl request (redirectUriFromLocation location)
 
 
-parseAuth : Navigation.Location -> Maybe (Result AuthorizeError AuthorizeResponse)
+parseAuth : Navigation.Location -> Maybe AuthorizeResult
 parseAuth location =
     let
         isKeyValue list =
@@ -227,17 +234,28 @@ parseAuth location =
                 |> Dict.fromList
 
         makeAuth dict =
-            Maybe.map3 AuthorizeResponse
+            Maybe.map3 (makeSuccess dict)
                 (Dict.get "access_token" dict)
                 (Dict.get "token_type" dict)
                 (Dict.get "account_id" dict)
-                |> Maybe.map
-                    (\partial ->
-                        partial
-                            -- TODO: handle unescaping of state, account_id
-                            (Dict.get "state" dict)
-                    )
-                |> Maybe.map Ok
+
+        makeSuccess dict accessToken tokenType accountId =
+            -- TODO: handle unescaping of state, account_id
+            case authorization tokenType accessToken of
+                Nothing ->
+                    UnknownAccessTokenErr
+                        { accessToken = accessToken
+                        , tokenType = tokenType
+                        , accountId = accountId
+                        , state = Dict.get "state" dict
+                        }
+
+                Just auth ->
+                    AuthorizeOk
+                        { userAuth = auth
+                        , accountId = accountId
+                        , state = Dict.get "state" dict
+                        }
 
         makeError dict =
             Maybe.map2 AuthorizeError
@@ -249,7 +267,7 @@ parseAuth location =
                             -- TODO: handle unescaping of state, error_description
                             (Dict.get "state" dict)
                     )
-                |> Maybe.map Err
+                |> Maybe.map DropboxAuthorizeErr
     in
     case String.uncons location.hash of
         Just ( '#', hash ) ->
@@ -269,14 +287,14 @@ type UserAuth
     = Bearer String
 
 
-authorization : AuthorizeResponse -> Result String UserAuth
-authorization response =
-    case response.tokenType of
+authorization : String -> String -> Maybe UserAuth
+authorization tokenType accessToken =
+    case tokenType of
         "bearer" ->
-            Ok <| Bearer response.accessToken
+            Just <| Bearer accessToken
 
         _ ->
-            Err ("Unknown token_type: " ++ response.tokenType)
+            Nothing
 
 
 authHeader : UserAuth -> Http.Header
@@ -845,17 +863,14 @@ program :
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
-    , onAuth : Result AuthorizeError ( AuthorizeResponse, Result String UserAuth ) -> msg
+    , onAuth : AuthorizeResult -> msg
     }
     -> Program Never model (Msg msg)
 program config =
     Navigation.program (always <| Msg Nothing)
         { init =
             \location ->
-                case
-                    parseAuth location
-                        |> Maybe.map (Result.map (\r -> ( r, authorization r )))
-                of
+                case parseAuth location of
                     Nothing ->
                         config.init location
                             |> Update.Extra.mapCmd (Msg << Just)

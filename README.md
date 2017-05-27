@@ -89,7 +89,7 @@ import Dropbox
 
 type Msg
     = ...
-    | AuthResponse (Result Dropbox.AuthorizeError ( Dropbox.AuthorizeResponse, Result String Dropbox.UserAuth ))
+    | AuthResponse Dropbox.AuthorizeResult
 
 main : Program Never Model (Dropbox.Msg Msg)
 main =
@@ -124,9 +124,9 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         ...
-        AuthResponse (Ok ( _, Ok auth )) ->
-            ( { model | dropboxAuth = Just auth }
-            , Dropbox.download auth
+        AuthResponse (Dropbox.AuthorizeOk auth) ->
+            ( { model | dropboxAuth = Just auth.userAuth }
+            , Dropbox.download auth.userAuth
                 { path : "/data_file_to_load.json" }
                 |> Task.attempt FetchFileResponse
             )
