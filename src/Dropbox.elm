@@ -1,6 +1,7 @@
 module Dropbox
     exposing
-        ( AuthorizeRequest
+        ( AuthorizeError
+        , AuthorizeRequest
         , AuthorizeResponse
         , Dimensions
         , DownloadError(..)
@@ -44,7 +45,7 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, Role, authorize, AuthorizeResponse, UserAuth
+@docs AuthorizeRequest, Role, authorize, AuthorizeResponse, AuthorizeError, UserAuth
 @docs authorizationUrl, redirectUriFromLocation
 
 
@@ -72,6 +73,7 @@ import Json.Decode.Dropbox exposing (openUnion, optional, tagObject, tagValue, t
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
+import Maybe.Extra
 import Navigation
 import Task exposing (Task)
 import Update.Extra
@@ -119,6 +121,18 @@ type alias AuthorizeResponse =
     { accessToken : String
     , tokenType : String
     , accountId : String
+    , state : Maybe String
+    }
+
+
+{-| Return value of the `authorize` endpoint when authentication fails. See `AuthorizeResponse`.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
+
+-}
+type alias AuthorizeError =
+    { error : String
+    , errorDescription : String
     , state : Maybe String
     }
 
@@ -193,7 +207,7 @@ authorize request location =
         authorizationUrl request (redirectUriFromLocation location)
 
 
-parseAuth : Navigation.Location -> Maybe AuthorizeResponse
+parseAuth : Navigation.Location -> Maybe (Result AuthorizeError AuthorizeResponse)
 parseAuth location =
     let
         isKeyValue list =
@@ -204,6 +218,13 @@ parseAuth location =
                 _ ->
                     Nothing
 
+        params hash =
+            hash
+                |> String.split "&"
+                |> List.map (String.split "=")
+                |> List.filterMap isKeyValue
+                |> Dict.fromList
+
         makeAuth dict =
             Maybe.map3 AuthorizeResponse
                 (Dict.get "access_token" dict)
@@ -212,18 +233,27 @@ parseAuth location =
                 |> Maybe.map
                     (\partial ->
                         partial
-                            -- TODO: handle unescaping of state, accountId
+                            -- TODO: handle unescaping of state, account_id
                             (Dict.get "state" dict)
                     )
+                |> Maybe.map Ok
+
+        makeError dict =
+            Maybe.map2 AuthorizeError
+                (Dict.get "error" dict)
+                (Dict.get "error_description" dict)
+                |> Maybe.map
+                    (\partial ->
+                        partial
+                            -- TODO: handle unescaping of state, error_description
+                            (Dict.get "state" dict)
+                    )
+                |> Maybe.map Err
     in
     case String.uncons location.hash of
         Just ( '#', hash ) ->
-            hash
-                |> String.split "&"
-                |> List.map (String.split "=")
-                |> List.filterMap isKeyValue
-                |> Dict.fromList
-                |> makeAuth
+            makeAuth (params hash)
+                |> Maybe.Extra.orElseLazy (\() -> makeError (params hash))
 
         _ ->
             Nothing
@@ -808,14 +838,17 @@ program :
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
-    , onAuth : AuthorizeResponse -> Result String UserAuth -> msg
+    , onAuth : Result AuthorizeError ( AuthorizeResponse, Result String UserAuth ) -> msg
     }
     -> Program Never model (Maybe msg)
 program config =
     Navigation.program (always Nothing)
         { init =
             \location ->
-                case parseAuth location of
+                case
+                    parseAuth location
+                        |> Maybe.map (Result.map (\r -> ( r, authorization r )))
+                of
                     Nothing ->
                         config.init location
                             |> Update.Extra.mapCmd Just
@@ -824,7 +857,7 @@ program config =
                         config.init location
                             |> Update.Extra.andThen
                                 config.update
-                                (config.onAuth response (authorization response))
+                                (config.onAuth response)
                             |> Update.Extra.mapCmd Just
         , update =
             \msg model ->

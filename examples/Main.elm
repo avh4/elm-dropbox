@@ -34,7 +34,7 @@ initialModel location =
 
 type Msg
     = StartAuth
-    | Authed Dropbox.AuthorizeResponse (Result String Dropbox.UserAuth)
+    | Authed (Result Dropbox.AuthorizeError ( Dropbox.AuthorizeResponse, Result String Dropbox.UserAuth ))
     | WriteFile Dropbox.UserAuth
     | ReadFile Dropbox.UserAuth
     | DebugResult String
@@ -64,11 +64,15 @@ update msg model =
             , Dropbox.authorize (authRequest model) model.location
             )
 
-        Authed authResponse (Ok auth) ->
+        Authed (Err err) ->
+            { model | auth = Nothing }
+                |> update (DebugResult <| toString <| msg)
+
+        Authed (Ok ( authResponse, Ok auth )) ->
             { model | auth = Just auth }
                 |> update (DebugResult <| toString <| authResponse)
 
-        Authed authResponse (Err err) ->
+        Authed (Ok ( authResponse, Err err )) ->
             { model | auth = Nothing }
                 |> update (DebugResult <| toString <| msg)
 
