@@ -44,15 +44,24 @@ type Msg
     | LogoutResponse (Result Http.Error ())
 
 
+authRequest : Model -> Dropbox.AuthorizeRequest
+authRequest model =
+    { clientId = model.clientId
+    , state = Nothing
+    , requireRole = Nothing
+    , forceReapprove = False
+    , disableSignup = False
+    , locale = Nothing
+    , forceReauthentication = False
+    }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         StartAuth ->
             ( model
-            , Dropbox.authFromLocation
-                model.clientId
-                model.location
-                |> Dropbox.authorize
+            , Dropbox.authorize (authRequest model) model.location
             )
 
         Authed (Ok auth) ->
@@ -146,13 +155,21 @@ view model =
             ]
         , pre [] [ text """startAuth : Cmd msg
 startAuth =
-    Dropbox.authFromLocation myClientId model.location
-        |> Dropbox.authorize""" ]
+    Dropbox.authorize
+        { clientId = myClientId
+        , state = Nothing
+        , requireRole = Nothing
+        , forceReapprove = False
+        , disableSignup = False
+        , locale = Nothing
+        , forceReauthentication = False
+        }
+        model.location""" ]
         , p []
             [ text "For this example, the redirect URL is "
             , code
                 [ style [ ( "word-break", "break-all" ) ] ]
-                [ text <| Dropbox.authorizationUrl <| Dropbox.authFromLocation model.clientId model.location ]
+                [ text <| Dropbox.authorizationUrl (authRequest model) (Dropbox.redirectUriFromLocation model.location) ]
             , text " You can redirect there using this button:"
             ]
         , button

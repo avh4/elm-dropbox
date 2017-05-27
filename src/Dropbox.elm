@@ -12,6 +12,7 @@ module Dropbox
         , MediaMetadata
         , PhotoMetadata
         , PropertyGroup
+        , Role(..)
         , UploadError(..)
         , UploadRequest
         , UploadResponse
@@ -20,11 +21,11 @@ module Dropbox
         , VideoMetadata
         , WriteError(..)
         , WriteMode(..)
-        , authFromLocation
         , authorizationUrl
         , authorize
         , download
         , program
+        , redirectUriFromLocation
         , tokenRevoke
         , upload
         )
@@ -42,7 +43,8 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, authFromLocation, authorize, authorizationUrl, UserAuth
+@docs AuthorizeRequest, Role, authorize, UserAuth
+@docs authorizationUrl, redirectUriFromLocation
 
 
 ### Auth
@@ -78,26 +80,26 @@ import Update.Extra
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 
+Note: `redirect_uri` is not present here because it is provided directly to
+`Dropbox.authorize` or `Dropbox.authorizationUrl`.
+
 -}
 type alias AuthorizeRequest =
     { clientId : String
-    , redirectUri : String
+    , state : Maybe String
+    , requireRole : Maybe Role
+    , forceReapprove : Bool
+    , disableSignup : Bool
+    , locale : Maybe String
+    , forceReauthentication : Bool
     }
 
 
-{-| Create a `AuthorizeRequest` from a `Navigation.Location`. This can be used
-with `Navigation.program` to automatically generate the redirectUri from the
-current page's URL.
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 -}
-authFromLocation : String -> Navigation.Location -> AuthorizeRequest
-authFromLocation clientId location =
-    { clientId = clientId
-    , redirectUri =
-        location.protocol
-            ++ "//"
-            ++ location.host
-            ++ location.pathname
-    }
+type Role
+    = Personal
+    | Work
 
 
 {-| Return value of the `authorize` endpoint, which is the data Dropbox returns via
@@ -124,27 +126,67 @@ which will initiate the authorization.
 See <https://www.dropbox.com/developers/reference/oauth-guide>
 
 -}
-authorizationUrl : AuthorizeRequest -> String
-authorizationUrl request =
+authorizationUrl : AuthorizeRequest -> String -> String
+authorizationUrl request redirectUri =
+    -- TODO: ensure that state and redirect_uri are properly escaped
+    let
+        param k v =
+            k ++ "=" ++ v
+
+        roleToString role =
+            case role of
+                Personal ->
+                    "personal"
+
+                Work ->
+                    "work"
+
+        boolToString bool =
+            case bool of
+                True ->
+                    "true"
+
+                False ->
+                    "false"
+    in
     String.concat
         [ "https://www.dropbox.com/oauth2/authorize"
         , "?"
-        , "response_type=token"
-        , "&"
-        , "client_id="
-        , request.clientId
-        , "&"
-        , "redirect_uri="
-        , request.redirectUri
+        , String.join "&" <|
+            List.filterMap identity
+                [ Just <| param "response_type" "token"
+                , Just <| param "client_id" request.clientId
+                , Just <| param "redirect_uri" redirectUri
+                , Maybe.map (param "state") request.state
+                , Maybe.map (param "require_role" << roleToString) request.requireRole
+                , Just <| param "force_reapprove" <| boolToString request.forceReapprove
+                , Just <| param "disable_signup" <| boolToString request.disableSignup
+                , Maybe.map (param "locale") request.locale
+                , Just <| param "force_reauthentication" <| boolToString request.forceReauthentication
+                ]
         ]
+
+
+{-| Generate a redirect URI from a `Navigation.Location`.
+
+Typically you will want to use `Dropbox.authorize`, which will do this automatically.
+You may want to use this if you need to manually manage the OAuth flow.
+
+-}
+redirectUriFromLocation : Navigation.Location -> String
+redirectUriFromLocation location =
+    location.protocol
+        ++ "//"
+        ++ location.host
+        ++ location.pathname
 
 
 {-| <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 -}
-authorize : AuthorizeRequest -> Cmd msg
-authorize request =
+authorize : AuthorizeRequest -> Navigation.Location -> Cmd msg
+authorize request location =
     Navigation.load <|
-        authorizationUrl request
+        authorizationUrl request (redirectUriFromLocation location)
 
 
 parseAuth : Navigation.Location -> Maybe AuthorizeResponse
