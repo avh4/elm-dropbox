@@ -1,11 +1,11 @@
 module Dropbox
     exposing
-        ( Authorization
-        , AuthorizeRequest
+        ( AuthorizeRequest
         , DownloadRequest
         , DownloadResponse
         , UploadRequest
         , UploadResponse
+        , UserAuth
         , authFromLocation
         , authorizationUrl
         , authorize
@@ -26,7 +26,7 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, authFromLocation, authorize
+@docs AuthorizeRequest, authFromLocation, authorize, authorizationUrl, UserAuth
 
 
 ### Auth
@@ -154,11 +154,16 @@ parseAuth location =
             Nothing
 
 
-type Authorization
+{-| A user authentication token that can be used to authenticate API calls
+
+See <https://www.dropbox.com/developers/reference/auth-types#user>
+
+-}
+type UserAuth
     = Bearer String
 
 
-authorization : AuthorizeResponse -> Result String Authorization
+authorization : AuthorizeResponse -> Result String UserAuth
 authorization response =
     case response.tokenType of
         "bearer" ->
@@ -168,14 +173,14 @@ authorization response =
             Err ("Unknown token_type: " ++ response.tokenType)
 
 
-authHeader : Authorization -> Http.Header
+authHeader : UserAuth -> Http.Header
 authHeader auth =
     case auth of
         Bearer accessToken ->
             Http.header "Authorization" ("Bearer " ++ accessToken)
 
 
-tokenRevoke : Authorization -> Http.Request ()
+tokenRevoke : UserAuth -> Http.Request ()
 tokenRevoke auth =
     let
         url =
@@ -216,7 +221,7 @@ type alias DownloadResponse =
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
 
 -}
-download : Authorization -> DownloadRequest -> Http.Request DownloadResponse
+download : UserAuth -> DownloadRequest -> Http.Request DownloadResponse
 download auth info =
     let
         url =
@@ -263,7 +268,7 @@ type alias UploadResponse =
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
 
 -}
-upload : Authorization -> UploadRequest -> Http.Request UploadResponse
+upload : UserAuth -> UploadRequest -> Http.Request UploadResponse
 upload auth info =
     let
         url =
@@ -299,7 +304,7 @@ program :
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
-    , onAuth : Result String Authorization -> msg
+    , onAuth : Result String UserAuth -> msg
     }
     -> Program Never model (Maybe msg)
 program config =

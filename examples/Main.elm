@@ -16,7 +16,7 @@ type alias Model =
     , writeContent : String
     , clientId : String
     , location : Navigation.Location
-    , auth : Maybe Dropbox.Authorization
+    , auth : Maybe Dropbox.UserAuth
     }
 
 
@@ -33,13 +33,13 @@ initialModel location =
 
 type Msg
     = StartAuth
-    | Authed (Result String Dropbox.Authorization)
-    | WriteFile Dropbox.Authorization
-    | ReadFile Dropbox.Authorization
+    | Authed (Result String Dropbox.UserAuth)
+    | WriteFile Dropbox.UserAuth
+    | ReadFile Dropbox.UserAuth
     | DebugResult String
     | ChangeWriteFilename String
     | ChangeAppId String
-    | Logout Dropbox.Authorization
+    | Logout Dropbox.UserAuth
     | LogoutResponse (Result Http.Error ())
 
 
