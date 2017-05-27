@@ -182,6 +182,11 @@ authHeader auth =
             Http.header "Authorization" ("Bearer " ++ accessToken)
 
 
+{-| Disables the access token used to authenticate the call.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#auth-token-revoke>
+
+-}
 tokenRevoke : UserAuth -> Http.Request ()
 tokenRevoke auth =
     let
