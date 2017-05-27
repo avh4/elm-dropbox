@@ -26,7 +26,7 @@ initialModel location =
     { debug = ""
     , writeFilename = "/elm-dropbox-test.txt"
     , writeContent = ""
-    , clientId = "CLIENT_ID"
+    , clientId = ""
     , location = location
     , auth = Nothing
     }
@@ -117,44 +117,97 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ h2 [] [ text "Dropbox.Config" ]
-        , input [ onInput ChangeAppId, defaultValue model.clientId ] []
-        , hr [] []
+    [ [ h3 [] [ text "Step 1: provide your clientId" ]
+      , p []
+            [ text "First, you need to provide your Dropbox application's clientId. "
+            , text "This is also called the \"App key\" and can be found on the Dropbox Developers page for your app. "
+            , text "Links: "
+            , a [ href "https://www.dropbox.com/developers/apps" ] [ text "your Dropbox apps" ]
+            , text ", "
+            , a [ href "https://www.dropbox.com/developers/apps/create" ] [ text "creat a new Dropbox app" ]
+            , p [] [ text "In code, you will hard-code the clientId into your app's source code. " ]
+            , p [] [ text "In this example, you will need to enter it below:" ]
+            ]
+      , input
+            [ onInput ChangeAppId
+            , defaultValue model.clientId
+            , placeholder "clientId a.k.a., App key"
+            ]
+            []
+      ]
+    , if String.trim model.clientId == "" then
+        []
+      else
+        [ h3 [] [ text "Step 2: redirect to the auth URL" ]
+        , p []
+            [ text "The Dropbox API uses OAuth 2.0 for user authentication. "
+            , text "To initiate an authentication request, you must redirect the user to the auth URL. "
+            , text "You can do that with the following code:"
+            ]
+        , pre [] [ text """startAuth : Cmd msg
+startAuth =
+    Dropbox.authFromLocation myClientId model.location
+        |> Dropbox.authorize""" ]
+        , p []
+            [ text "For this example, the redirect URL is "
+            , code
+                [ style [ ( "word-break", "break-all" ) ] ]
+                [ text <| Dropbox.authorizationUrl <| Dropbox.authFromLocation model.clientId model.location ]
+            , text " You can redirect there using this button:"
+            ]
         , button
             [ onClick StartAuth ]
             [ text "Auth" ]
-        , code []
-            [ text <| Dropbox.authorizationUrl <| Dropbox.authFromLocation model.clientId model.location ]
-        , hr [] []
-        , code [] [ text <| toString model.auth ]
-        , hr [] []
-        , case model.auth of
-            Just auth ->
-                section []
-                    [ input
-                        [ onInput ChangeWriteFilename
-                        , defaultValue model.writeFilename
-                        ]
-                        []
-                    , button
-                        [ onClick (WriteFile auth) ]
-                        [ text "Write" ]
-                    , hr [] []
-                    , button
-                        [ onClick (ReadFile auth) ]
-                        [ text "Read" ]
-                    , hr [] []
-                    , button
-                        [ onClick (Logout auth) ]
-                        [ text "Log out" ]
-                    ]
-
-            Nothing ->
-                text ""
-        , code []
-            [ text model.debug ]
+        , p []
+            [ text "When authentication is complete, Dropbox will redirect back to this page, "
+            , text "providing the result in the URL, which can be parsed by using "
+            , code [] [ text "Dropbox.program" ]
+            , text "."
+            ]
         ]
+    , case model.auth of
+        Just auth ->
+            [ p []
+                [ text "Auth token: "
+                , code [] [ text <| toString model.auth ]
+                ]
+            , h3 [] [ text "Step 3: Use the API" ]
+            , h4 [] [ text "files/upload" ]
+            , input
+                [ onInput ChangeWriteFilename
+                , defaultValue model.writeFilename
+                ]
+                []
+            , button
+                [ onClick (WriteFile auth) ]
+                [ text "Upload" ]
+            , hr [] []
+            , h4 [] [ text "files/download" ]
+            , input
+                [ onInput ChangeWriteFilename
+                , defaultValue model.writeFilename
+                ]
+                []
+            , button
+                [ onClick (ReadFile auth) ]
+                [ text "download" ]
+            , hr [] []
+            , h4 [] [ text "auth/token_revoke" ]
+            , button
+                [ onClick (Logout auth) ]
+                [ text "token_revoke" ]
+            ]
+
+        Nothing ->
+            []
+    , [ h3 [] [ text "Debug output" ]
+      , code [] [ text model.debug ]
+      ]
+    ]
+        |> List.filter ((/=) [])
+        |> List.intersperse [ hr [] [] ]
+        |> List.concat
+        |> div []
 
 
 main : Program Never Model (Maybe Msg)
