@@ -1,6 +1,7 @@
 module Dropbox
     exposing
         ( AuthorizeRequest
+        , AuthorizeResponse
         , Dimensions
         , DownloadError(..)
         , DownloadRequest
@@ -43,7 +44,7 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, Role, authorize, UserAuth
+@docs AuthorizeRequest, Role, authorize, AuthorizeResponse, UserAuth
 @docs authorizationUrl, redirectUriFromLocation
 
 
@@ -110,12 +111,15 @@ or by using `parseAuth` if you need to manually parse the redirect URL.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 
+Note: `uid` is not provided because it is deprecated.
+See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
+
 -}
 type alias AuthorizeResponse =
     { accessToken : String
     , tokenType : String
-    , uid : String
     , accountId : String
+    , state : Maybe String
     }
 
 
@@ -201,11 +205,16 @@ parseAuth location =
                     Nothing
 
         makeAuth dict =
-            Maybe.map4 AuthorizeResponse
+            Maybe.map3 AuthorizeResponse
                 (Dict.get "access_token" dict)
                 (Dict.get "token_type" dict)
-                (Dict.get "uid" dict)
                 (Dict.get "account_id" dict)
+                |> Maybe.map
+                    (\partial ->
+                        partial
+                            -- TODO: handle unescaping of state, accountId
+                            (Dict.get "state" dict)
+                    )
     in
     case String.uncons location.hash of
         Just ( '#', hash ) ->
@@ -799,7 +808,7 @@ program :
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
-    , onAuth : Result String UserAuth -> msg
+    , onAuth : AuthorizeResponse -> Result String UserAuth -> msg
     }
     -> Program Never model (Maybe msg)
 program config =
@@ -815,7 +824,7 @@ program config =
                         config.init location
                             |> Update.Extra.andThen
                                 config.update
-                                (config.onAuth <| authorization <| response)
+                                (config.onAuth response (authorization response))
                             |> Update.Extra.mapCmd Just
         , update =
             \msg model ->
