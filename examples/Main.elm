@@ -26,7 +26,11 @@ initialModel location =
     { debug = ""
     , writeFilename = "/elm-dropbox-test.txt"
     , writeContent = ""
-    , clientId = ""
+    , clientId =
+        if location.host == "avh4.github.io" then
+            "cackwvfdggogoes"
+        else
+            ""
     , location = location
     , auth = Nothing
     }
