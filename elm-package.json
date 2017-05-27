@@ -2,7 +2,7 @@
     "version": "1.0.0",
     "summary": "Unofficial Dropbox API for Elm",
     "repository": "https://github.com/avh4/elm-dropbox.git",
-    "license": "BSD3",
+    "license": "MIT",
     "source-directories": [
         "src"
     ],
