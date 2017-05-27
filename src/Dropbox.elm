@@ -6,6 +6,7 @@ module Dropbox
         , UploadRequest
         , UploadResponse
         , UserAuth
+        , WriteMode(..)
         , authFromLocation
         , authorizationUrl
         , authorize
@@ -39,10 +40,12 @@ See the official Dropbox documentation at
 ### Files
 
 @docs download, DownloadRequest, DownloadResponse
-@docs upload, UploadRequest, UploadResponse
+@docs upload, UploadRequest, WriteMode, UploadResponse
 
 -}
 
+import Date exposing (Date)
+import Date.Format
 import Dict
 import Html exposing (Html)
 import Http
@@ -256,10 +259,39 @@ download auth info =
         }
 
 
+{-| Your intent when writing a file to some path.
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
+-}
+type WriteMode
+    = Add
+    | Overwrite
+    | Update String
+
+
+encodeWriteModel : WriteMode -> Json.Encode.Value
+encodeWriteModel mode =
+    case mode of
+        Add ->
+            Json.Encode.object [ ( ".tag", Json.Encode.string "add" ) ]
+
+        Overwrite ->
+            Json.Encode.object [ ( ".tag", Json.Encode.string "overwrite" ) ]
+
+        Update rev ->
+            Json.Encode.object
+                [ ( ".tag", Json.Encode.string "update" )
+                , ( "update", Json.Encode.string rev )
+                ]
+
+
 {-| Request parameters for `upload`
 -}
 type alias UploadRequest =
-    { filename : String
+    { path : String
+    , mode : WriteMode
+    , autorename : Bool
+    , clientModified : Maybe Date
+    , mute : Bool
     , content : String
     }
 
@@ -289,8 +321,17 @@ upload auth info =
 
         dropboxArg =
             Json.Encode.encode 0 <|
-                Json.Encode.object
-                    [ ( "path", Json.Encode.string info.filename ) ]
+                Json.Encode.object <|
+                    List.filterMap identity
+                        [ Just ( "path", Json.Encode.string info.path )
+                        , Just ( "mode", encodeWriteModel info.mode )
+                        , Just ( "autorename", Json.Encode.bool info.autorename )
+                        , info.clientModified
+                            |> Maybe.map Date.Format.formatISO8601
+                            |> Maybe.map Json.Encode.string
+                            |> Maybe.map ((,) "client_modified")
+                        , Just ( "mute", Json.Encode.bool info.mute )
+                        ]
     in
     Http.request
         { method = "POST"

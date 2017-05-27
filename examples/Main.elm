@@ -66,7 +66,11 @@ update msg model =
         WriteFile auth ->
             ( model
             , Dropbox.upload auth
-                { filename = model.writeFilename
+                { path = model.writeFilename
+                , mode = Dropbox.Add
+                , autorename = False
+                , clientModified = Nothing
+                , mute = False
                 , content = "HELLO."
                 }
                 |> Http.send (toString >> DebugResult)
