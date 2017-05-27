@@ -82,7 +82,7 @@ update msg model =
             , Dropbox.download auth
                 { path = model.writeFilename
                 }
-                |> Http.send (toString >> DebugResult)
+                |> Task.attempt (toString >> DebugResult)
             )
 
         DebugResult result ->

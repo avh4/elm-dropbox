@@ -282,12 +282,46 @@ decodeDownloadResponse content =
         |> optional "content_hash" Json.Decode.string
 
 
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
+-}
+type DownloadError
+    = PathDownloadError LookupError
+    | OtherDownloadError String Json.Encode.Value
+    | OtherDownloadFailure Http.Error
+
+
+decodeDownloadError : Json.Decode.Decoder DownloadError
+decodeDownloadError =
+    Json.Decode.field "error" <|
+        openUnion OtherDownloadError
+            [ tagValue "path" PathDownloadError decodeLookupError
+            ]
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
+-}
+type LookupError
+    = MalformedPathLookup (Maybe String)
+    | NotFound
+    | NotFile
+    | NotFolder
+    | RestrictedContent
+    | OtherLookupError String Json.Encode.Value
+
+
+decodeLookupError : Json.Decode.Decoder LookupError
+decodeLookupError =
+    openUnion OtherLookupError
+        [ tagValue "malformed_path" MalformedPathLookup (Json.Decode.nullable Json.Decode.string)
+        ]
+
+
 {-| Download a file from a user's Dropbox.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
 
 -}
-download : UserAuth -> DownloadRequest -> Http.Request DownloadResponse
+download : UserAuth -> DownloadRequest -> Task DownloadError DownloadResponse
 download auth info =
     let
         url =
@@ -305,6 +339,19 @@ download auth info =
             Json.Encode.encode 0 <|
                 Json.Encode.object
                     [ ( "path", Json.Encode.string info.path ) ]
+
+        decodeError err =
+            case err of
+                Http.BadStatus response ->
+                    case Json.Decode.decodeString decodeDownloadError response.body of
+                        Ok err ->
+                            err
+
+                        Err _ ->
+                            OtherDownloadFailure err
+
+                _ ->
+                    OtherDownloadFailure err
     in
     Http.request
         { method = "POST"
@@ -318,6 +365,8 @@ download auth info =
         , timeout = Nothing
         , withCredentials = False
         }
+        |> Http.toTask
+        |> Task.mapError decodeError
 
 
 {-| Your intent when writing a file to some path.
@@ -598,7 +647,7 @@ decodeUploadWriteFailed =
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
 -}
 type WriteError
-    = MalformedPath (Maybe String)
+    = MalformedPathWrite (Maybe String)
     | Conflict WriteConflictError
     | NoWritePermission
     | InsufficientSpace
@@ -610,7 +659,7 @@ type WriteError
 decodeWriteError : Json.Decode.Decoder WriteError
 decodeWriteError =
     openUnion OtherWriteError
-        [ tagValue "malformed_path" MalformedPath (Json.Decode.nullable Json.Decode.string)
+        [ tagValue "malformed_path" MalformedPathWrite (Json.Decode.nullable Json.Decode.string)
         , tagValue "conflict" Conflict decodeWriteConflictError
         , tagVoid "no_write_permission" NoWritePermission
         , tagVoid "insufficient_space" InsufficientSpace
