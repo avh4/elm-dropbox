@@ -12313,83 +12313,10 @@ var _user$project$Dropbox$AuthorizeRequest = F7(
 	function (a, b, c, d, e, f, g) {
 		return {clientId: a, state: b, requireRole: c, forceReapprove: d, disableSignup: e, locale: f, forceReauthentication: g};
 	});
-var _user$project$Dropbox$AuthorizeResponse = F4(
-	function (a, b, c, d) {
-		return {accessToken: a, tokenType: b, accountId: c, state: d};
-	});
 var _user$project$Dropbox$AuthorizeError = F3(
 	function (a, b, c) {
 		return {error: a, errorDescription: b, state: c};
 	});
-var _user$project$Dropbox$parseAuth = function (location) {
-	var makeError = function (dict) {
-		return A2(
-			_elm_lang$core$Maybe$map,
-			_elm_lang$core$Result$Err,
-			A2(
-				_elm_lang$core$Maybe$map,
-				function (partial) {
-					return partial(
-						A2(_elm_lang$core$Dict$get, 'state', dict));
-				},
-				A3(
-					_elm_lang$core$Maybe$map2,
-					_user$project$Dropbox$AuthorizeError,
-					A2(_elm_lang$core$Dict$get, 'error', dict),
-					A2(_elm_lang$core$Dict$get, 'error_description', dict))));
-	};
-	var makeAuth = function (dict) {
-		return A2(
-			_elm_lang$core$Maybe$map,
-			_elm_lang$core$Result$Ok,
-			A2(
-				_elm_lang$core$Maybe$map,
-				function (partial) {
-					return partial(
-						A2(_elm_lang$core$Dict$get, 'state', dict));
-				},
-				A4(
-					_elm_lang$core$Maybe$map3,
-					_user$project$Dropbox$AuthorizeResponse,
-					A2(_elm_lang$core$Dict$get, 'access_token', dict),
-					A2(_elm_lang$core$Dict$get, 'token_type', dict),
-					A2(_elm_lang$core$Dict$get, 'account_id', dict))));
-	};
-	var isKeyValue = function (list) {
-		var _p5 = list;
-		if (((_p5.ctor === '::') && (_p5._1.ctor === '::')) && (_p5._1._1.ctor === '[]')) {
-			return _elm_lang$core$Maybe$Just(
-				{ctor: '_Tuple2', _0: _p5._0, _1: _p5._1._0});
-		} else {
-			return _elm_lang$core$Maybe$Nothing;
-		}
-	};
-	var params = function (hash) {
-		return _elm_lang$core$Dict$fromList(
-			A2(
-				_elm_lang$core$List$filterMap,
-				isKeyValue,
-				A2(
-					_elm_lang$core$List$map,
-					_elm_lang$core$String$split('='),
-					A2(_elm_lang$core$String$split, '&', hash))));
-	};
-	var _p6 = _elm_lang$core$String$uncons(location.hash);
-	if (((_p6.ctor === 'Just') && (_p6._0.ctor === '_Tuple2')) && (_p6._0._0.valueOf() === '#')) {
-		var _p9 = _p6._0._1;
-		return A2(
-			_elm_community$maybe_extra$Maybe_Extra$orElseLazy,
-			function (_p7) {
-				var _p8 = _p7;
-				return makeError(
-					params(_p9));
-			},
-			makeAuth(
-				params(_p9)));
-	} else {
-		return _elm_lang$core$Maybe$Nothing;
-	}
-};
 var _user$project$Dropbox$DownloadRequest = function (a) {
 	return {path: a};
 };
@@ -12570,74 +12497,107 @@ var _user$project$Dropbox$UploadWriteFailed = F2(
 	});
 var _user$project$Dropbox$Work = {ctor: 'Work'};
 var _user$project$Dropbox$Personal = {ctor: 'Personal'};
+var _user$project$Dropbox$UnknownAccessTokenErr = function (a) {
+	return {ctor: 'UnknownAccessTokenErr', _0: a};
+};
+var _user$project$Dropbox$AuthorizeOk = function (a) {
+	return {ctor: 'AuthorizeOk', _0: a};
+};
+var _user$project$Dropbox$DropboxAuthorizeErr = function (a) {
+	return {ctor: 'DropboxAuthorizeErr', _0: a};
+};
 var _user$project$Dropbox$Bearer = function (a) {
 	return {ctor: 'Bearer', _0: a};
 };
-var _user$project$Dropbox$authorization = function (response) {
-	var _p10 = response.tokenType;
-	if (_p10 === 'bearer') {
-		return _elm_lang$core$Result$Ok(
-			_user$project$Dropbox$Bearer(response.accessToken));
-	} else {
-		return _elm_lang$core$Result$Err(
-			A2(_elm_lang$core$Basics_ops['++'], 'Unknown token_type: ', response.tokenType));
-	}
-};
-var _user$project$Dropbox$program = function (config) {
-	return A2(
-		_elm_lang$navigation$Navigation$program,
-		_elm_lang$core$Basics$always(_elm_lang$core$Maybe$Nothing),
-		{
-			init: function (location) {
-				var _p11 = A2(
-					_elm_lang$core$Maybe$map,
-					_elm_lang$core$Result$map(
-						function (r) {
-							return {
-								ctor: '_Tuple2',
-								_0: r,
-								_1: _user$project$Dropbox$authorization(r)
-							};
-						}),
-					_user$project$Dropbox$parseAuth(location));
-				if (_p11.ctor === 'Nothing') {
-					return A2(
-						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
-						_elm_lang$core$Maybe$Just,
-						config.init(location));
-				} else {
-					return A2(
-						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
-						_elm_lang$core$Maybe$Just,
-						A3(
-							_ccapndave$elm_update_extra$Update_Extra$andThen,
-							config.update,
-							config.onAuth(_p11._0),
-							config.init(location)));
-				}
-			},
-			update: F2(
-				function (msg, model) {
-					var _p12 = msg;
-					if (_p12.ctor === 'Nothing') {
-						return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
-					} else {
-						return A2(
-							_ccapndave$elm_update_extra$Update_Extra$mapCmd,
-							_elm_lang$core$Maybe$Just,
-							A2(config.update, _p12._0, model));
-					}
-				}),
-			subscriptions: function (_p13) {
-				return _elm_lang$core$Platform_Sub$none;
-			},
-			view: function (_p14) {
-				return A2(
-					_elm_lang$html$Html$map,
-					_elm_lang$core$Maybe$Just,
-					config.view(_p14));
+var _user$project$Dropbox$authorization = F2(
+	function (tokenType, accessToken) {
+		var _p5 = tokenType;
+		if (_p5 === 'bearer') {
+			return _elm_lang$core$Maybe$Just(
+				_user$project$Dropbox$Bearer(accessToken));
+		} else {
+			return _elm_lang$core$Maybe$Nothing;
+		}
+	});
+var _user$project$Dropbox$parseAuth = function (location) {
+	var makeError = function (dict) {
+		return A2(
+			_elm_lang$core$Maybe$map,
+			_user$project$Dropbox$DropboxAuthorizeErr,
+			A2(
+				_elm_lang$core$Maybe$map,
+				function (partial) {
+					return partial(
+						A2(_elm_lang$core$Dict$get, 'state', dict));
+				},
+				A3(
+					_elm_lang$core$Maybe$map2,
+					_user$project$Dropbox$AuthorizeError,
+					A2(_elm_lang$core$Dict$get, 'error', dict),
+					A2(_elm_lang$core$Dict$get, 'error_description', dict))));
+	};
+	var makeSuccess = F4(
+		function (dict, accessToken, tokenType, accountId) {
+			var _p6 = A2(_user$project$Dropbox$authorization, tokenType, accessToken);
+			if (_p6.ctor === 'Nothing') {
+				return _user$project$Dropbox$UnknownAccessTokenErr(
+					{
+						accessToken: accessToken,
+						tokenType: tokenType,
+						accountId: accountId,
+						state: A2(_elm_lang$core$Dict$get, 'state', dict)
+					});
+			} else {
+				return _user$project$Dropbox$AuthorizeOk(
+					{
+						userAuth: _p6._0,
+						accountId: accountId,
+						state: A2(_elm_lang$core$Dict$get, 'state', dict)
+					});
 			}
 		});
+	var makeAuth = function (dict) {
+		return A4(
+			_elm_lang$core$Maybe$map3,
+			makeSuccess(dict),
+			A2(_elm_lang$core$Dict$get, 'access_token', dict),
+			A2(_elm_lang$core$Dict$get, 'token_type', dict),
+			A2(_elm_lang$core$Dict$get, 'account_id', dict));
+	};
+	var isKeyValue = function (list) {
+		var _p7 = list;
+		if (((_p7.ctor === '::') && (_p7._1.ctor === '::')) && (_p7._1._1.ctor === '[]')) {
+			return _elm_lang$core$Maybe$Just(
+				{ctor: '_Tuple2', _0: _p7._0, _1: _p7._1._0});
+		} else {
+			return _elm_lang$core$Maybe$Nothing;
+		}
+	};
+	var params = function (hash) {
+		return _elm_lang$core$Dict$fromList(
+			A2(
+				_elm_lang$core$List$filterMap,
+				isKeyValue,
+				A2(
+					_elm_lang$core$List$map,
+					_elm_lang$core$String$split('='),
+					A2(_elm_lang$core$String$split, '&', hash))));
+	};
+	var _p8 = _elm_lang$core$String$uncons(location.hash);
+	if (((_p8.ctor === 'Just') && (_p8._0.ctor === '_Tuple2')) && (_p8._0._0.valueOf() === '#')) {
+		var _p11 = _p8._0._1;
+		return A2(
+			_elm_community$maybe_extra$Maybe_Extra$orElseLazy,
+			function (_p9) {
+				var _p10 = _p9;
+				return makeError(
+					params(_p11));
+			},
+			makeAuth(
+				params(_p11)));
+	} else {
+		return _elm_lang$core$Maybe$Nothing;
+	}
 };
 var _user$project$Dropbox$OtherDownloadFailure = function (a) {
 	return {ctor: 'OtherDownloadFailure', _0: a};
@@ -12783,11 +12743,11 @@ var _user$project$Dropbox$decodeDownloadResponse = function (content) {
 var _user$project$Dropbox$download = F2(
 	function (auth, info) {
 		var decodeError = function (err) {
-			var _p15 = err;
-			if (_p15.ctor === 'BadStatus') {
-				var _p16 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeDownloadError, _p15._0.body);
-				if (_p16.ctor === 'Ok') {
-					return _p16._0;
+			var _p12 = err;
+			if (_p12.ctor === 'BadStatus') {
+				var _p13 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeDownloadError, _p12._0.body);
+				if (_p13.ctor === 'Ok') {
+					return _p13._0;
 				} else {
 					return _user$project$Dropbox$OtherDownloadFailure(err);
 				}
@@ -12809,14 +12769,14 @@ var _user$project$Dropbox$download = F2(
 					_1: {ctor: '[]'}
 				}));
 		var parse = function (response) {
-			var _p17 = A2(_elm_lang$core$Dict$get, 'dropbox-api-result', response.headers);
-			if (_p17.ctor === 'Nothing') {
+			var _p14 = A2(_elm_lang$core$Dict$get, 'dropbox-api-result', response.headers);
+			if (_p14.ctor === 'Nothing') {
 				return _elm_lang$core$Result$Err('No dropbox-api-result header found');
 			} else {
 				return A2(
 					_elm_lang$core$Json_Decode$decodeString,
 					_user$project$Dropbox$decodeDownloadResponse(response.body),
-					_p17._0);
+					_p14._0);
 			}
 		};
 		var url = 'https://content.dropboxapi.com/2/files/download';
@@ -13002,11 +12962,11 @@ var _user$project$Dropbox$decodeUploadError = A2(
 var _user$project$Dropbox$upload = F2(
 	function (auth, info) {
 		var decodeError = function (err) {
-			var _p18 = err;
-			if (_p18.ctor === 'BadStatus') {
-				var _p19 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeUploadError, _p18._0.body);
-				if (_p19.ctor === 'Ok') {
-					return _p19._0;
+			var _p15 = err;
+			if (_p15.ctor === 'BadStatus') {
+				var _p16 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeUploadError, _p15._0.body);
+				if (_p16.ctor === 'Ok') {
+					return _p16._0;
 				} else {
 					return _user$project$Dropbox$OtherUploadFailure(err);
 				}
@@ -13096,6 +13056,69 @@ var _user$project$Dropbox$upload = F2(
 						withCredentials: false
 					})));
 	});
+var _user$project$Dropbox$Msg = function (a) {
+	return {ctor: 'Msg', _0: a};
+};
+var _user$project$Dropbox$program = function (config) {
+	return A2(
+		_elm_lang$navigation$Navigation$program,
+		_elm_lang$core$Basics$always(
+			_user$project$Dropbox$Msg(_elm_lang$core$Maybe$Nothing)),
+		{
+			init: function (location) {
+				var _p17 = _user$project$Dropbox$parseAuth(location);
+				if (_p17.ctor === 'Nothing') {
+					return A2(
+						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
+						function (_p18) {
+							return _user$project$Dropbox$Msg(
+								_elm_lang$core$Maybe$Just(_p18));
+						},
+						config.init(location));
+				} else {
+					return A2(
+						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
+						function (_p19) {
+							return _user$project$Dropbox$Msg(
+								_elm_lang$core$Maybe$Just(_p19));
+						},
+						A3(
+							_ccapndave$elm_update_extra$Update_Extra$andThen,
+							config.update,
+							config.onAuth(_p17._0),
+							config.init(location)));
+				}
+			},
+			update: F2(
+				function (_p20, model) {
+					var _p21 = _p20;
+					var _p22 = _p21._0;
+					if (_p22.ctor === 'Nothing') {
+						return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+					} else {
+						return A2(
+							_ccapndave$elm_update_extra$Update_Extra$mapCmd,
+							function (_p23) {
+								return _user$project$Dropbox$Msg(
+									_elm_lang$core$Maybe$Just(_p23));
+							},
+							A2(config.update, _p22._0, model));
+					}
+				}),
+			subscriptions: function (_p24) {
+				return _elm_lang$core$Platform_Sub$none;
+			},
+			view: function (_p25) {
+				return A2(
+					_elm_lang$html$Html$map,
+					function (_p26) {
+						return _user$project$Dropbox$Msg(
+							_elm_lang$core$Maybe$Just(_p26));
+					},
+					config.view(_p25));
+			}
+		});
+};
 var _user$project$Main$authRequest = function (model) {
 	return {clientId: model.clientId, state: _elm_lang$core$Maybe$Nothing, requireRole: _elm_lang$core$Maybe$Nothing, forceReapprove: false, disableSignup: false, locale: _elm_lang$core$Maybe$Nothing, forceReauthentication: false};
 };
@@ -13144,37 +13167,26 @@ var _user$project$Main$update = F2(
 							model.location)
 					};
 				case 'Authed':
-					if (_p0._0.ctor === 'Err') {
+					if (_p0._0.ctor === 'AuthorizeOk') {
 						var _v1 = _user$project$Main$DebugResult(
 							_elm_lang$core$Basics$toString(msg)),
 							_v2 = _elm_lang$core$Native_Utils.update(
 							model,
-							{auth: _elm_lang$core$Maybe$Nothing});
+							{
+								auth: _elm_lang$core$Maybe$Just(_p0._0._0.userAuth)
+							});
 						msg = _v1;
 						model = _v2;
 						continue update;
 					} else {
-						if (_p0._0._0._1.ctor === 'Ok') {
-							var _v3 = _user$project$Main$DebugResult(
-								_elm_lang$core$Basics$toString(_p0._0._0._0)),
-								_v4 = _elm_lang$core$Native_Utils.update(
-								model,
-								{
-									auth: _elm_lang$core$Maybe$Just(_p0._0._0._1._0)
-								});
-							msg = _v3;
-							model = _v4;
-							continue update;
-						} else {
-							var _v5 = _user$project$Main$DebugResult(
-								_elm_lang$core$Basics$toString(msg)),
-								_v6 = _elm_lang$core$Native_Utils.update(
-								model,
-								{auth: _elm_lang$core$Maybe$Nothing});
-							msg = _v5;
-							model = _v6;
-							continue update;
-						}
+						var _v3 = _user$project$Main$DebugResult(
+							_elm_lang$core$Basics$toString(msg)),
+							_v4 = _elm_lang$core$Native_Utils.update(
+							model,
+							{auth: _elm_lang$core$Maybe$Nothing});
+						msg = _v3;
+						model = _v4;
+						continue update;
 					}
 				case 'WriteFile':
 					return {
@@ -13249,12 +13261,12 @@ var _user$project$Main$update = F2(
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					} else {
-						var _v7 = _user$project$Main$DebugResult(
+						var _v5 = _user$project$Main$DebugResult(
 							_elm_lang$core$Basics$toString(
 								_elm_lang$core$Result$Err(_p0._0._0))),
-							_v8 = model;
-						msg = _v7;
-						model = _v8;
+							_v6 = model;
+						msg = _v5;
+						model = _v6;
 						continue update;
 					}
 			}
