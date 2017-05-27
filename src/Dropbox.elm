@@ -1,6 +1,6 @@
 module Dropbox
     exposing
-        ( Auth
+        ( Authorization
         , AuthorizeRequest
         , DownloadResponse
         , UploadResponse
@@ -73,7 +73,16 @@ authFromLocation clientId location =
     }
 
 
-type alias Auth =
+{-| Return value of the `authorize` endpoint, which is the data Dropbox returns via
+the redirect URL.
+
+You can get the `AuthorizeResponse` by using `Dropbox.program`,
+or by using `parseAuth` if you need to manually parse the redirect URL.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
+
+-}
+type alias AuthorizeResponse =
     { accessToken : String
     , tokenType : String
     , uid : String
@@ -111,7 +120,7 @@ authorize request =
         authorizationUrl request
 
 
-parseAuth : Navigation.Location -> Maybe Auth
+parseAuth : Navigation.Location -> Maybe AuthorizeResponse
 parseAuth location =
     let
         isKeyValue list =
@@ -123,7 +132,7 @@ parseAuth location =
                     Nothing
 
         makeAuth dict =
-            Maybe.map4 Auth
+            Maybe.map4 AuthorizeResponse
                 (Dict.get "access_token" dict)
                 (Dict.get "token_type" dict)
                 (Dict.get "uid" dict)
@@ -142,7 +151,28 @@ parseAuth location =
             Nothing
 
 
-tokenRevoke : Auth -> Http.Request ()
+type Authorization
+    = Bearer String
+
+
+authorization : AuthorizeResponse -> Result String Authorization
+authorization response =
+    case response.tokenType of
+        "bearer" ->
+            Ok <| Bearer response.accessToken
+
+        _ ->
+            Err ("Unknown token_type: " ++ response.tokenType)
+
+
+authHeader : Authorization -> Http.Header
+authHeader auth =
+    case auth of
+        Bearer accessToken ->
+            Http.header "Authorization" ("Bearer " ++ accessToken)
+
+
+tokenRevoke : Authorization -> Http.Request ()
 tokenRevoke auth =
     let
         url =
@@ -154,7 +184,7 @@ tokenRevoke auth =
     Http.request
         { method = "POST"
         , headers =
-            [ Http.header "Authorization" ("Bearer " ++ auth.accessToken)
+            [ authHeader auth
             ]
         , url = url
         , body = Http.emptyBody
@@ -168,7 +198,7 @@ type alias DownloadResponse =
     { content : String }
 
 
-download : Auth -> { filename : String } -> Http.Request DownloadResponse
+download : Authorization -> { filename : String } -> Http.Request DownloadResponse
 download auth info =
     let
         url =
@@ -185,7 +215,7 @@ download auth info =
     Http.request
         { method = "POST"
         , headers =
-            [ Http.header "Authorization" ("Bearer " ++ auth.accessToken)
+            [ authHeader auth
             , Http.header "Dropbox-API-Arg" dropboxArg
             ]
         , url = url
@@ -206,7 +236,7 @@ type alias UploadRequest =
     }
 
 
-upload : Auth -> UploadRequest -> Http.Request UploadResponse
+upload : Authorization -> UploadRequest -> Http.Request UploadResponse
 upload auth info =
     let
         url =
@@ -226,7 +256,7 @@ upload auth info =
     Http.request
         { method = "POST"
         , headers =
-            [ Http.header "Authorization" ("Bearer " ++ auth.accessToken)
+            [ authHeader auth
             , Http.header "Dropbox-API-Arg" dropboxArg
             ]
         , url = url
@@ -242,7 +272,7 @@ program :
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
-    , onAuth : Auth -> msg
+    , onAuth : Result String Authorization -> msg
     }
     -> Program Never model (Maybe msg)
 program config =
@@ -254,11 +284,11 @@ program config =
                         config.init location
                             |> Update.Extra.mapCmd Just
 
-                    Just auth ->
+                    Just response ->
                         config.init location
                             |> Update.Extra.andThen
                                 config.update
-                                (config.onAuth auth)
+                                (config.onAuth <| authorization <| response)
                             |> Update.Extra.mapCmd Just
         , update =
             \msg model ->
