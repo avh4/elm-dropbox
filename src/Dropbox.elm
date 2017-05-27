@@ -23,6 +23,8 @@ module Dropbox
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
 
+@docs program
+
 
 ### Authorization
 
@@ -299,6 +301,10 @@ upload auth info =
         }
 
 
+{-| This provides the simplest way to integrate Dropbox authentication.
+Using `Dropbox.program` will handle parsing the authentication response from the
+authentication redirect so that you don't have to do it manually.
+-}
 program :
     { init : Navigation.Location -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
