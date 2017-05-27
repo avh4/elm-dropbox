@@ -2,18 +2,23 @@ module Dropbox
     exposing
         ( AuthorizeRequest
         , Dimensions
+        , DownloadError(..)
         , DownloadRequest
         , DownloadResponse
         , FileSharingInfo
         , GpsCoordinates
+        , LookupError(..)
         , MediaInfo
         , MediaMetadata
         , PhotoMetadata
         , PropertyGroup
+        , UploadError(..)
         , UploadRequest
         , UploadResponse
+        , UploadWriteFailed
         , UserAuth
         , VideoMetadata
+        , WriteError(..)
         , WriteMode(..)
         , authFromLocation
         , authorizationUrl
@@ -47,8 +52,8 @@ See the official Dropbox documentation at
 
 ### Files
 
-@docs download, DownloadRequest, DownloadResponse
-@docs upload, UploadRequest, WriteMode, UploadResponse
+@docs download, DownloadRequest, DownloadResponse, DownloadError, LookupError
+@docs upload, UploadRequest, WriteMode, UploadResponse, UploadError, UploadWriteFailed, WriteError
 
 @docs MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
 
