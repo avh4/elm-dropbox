@@ -2,6 +2,8 @@ module Main exposing (..)
 
 import BeautifulExample
 import Color
+import Date exposing (Date)
+import Debug.Control as Control exposing (Control)
 import Dropbox
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -13,8 +15,8 @@ import Task
 
 type alias Model =
     { debug : String
-    , writeFilename : String
-    , writeContent : String
+    , uploadRequest : Control Dropbox.UploadRequest
+    , downloadRequest : Control Dropbox.DownloadRequest
     , clientId : String
     , location : Navigation.Location
     , auth : Maybe Dropbox.UserAuth
@@ -24,8 +26,24 @@ type alias Model =
 initialModel : Navigation.Location -> Model
 initialModel location =
     { debug = ""
-    , writeFilename = "/elm-dropbox-test.txt"
-    , writeContent = ""
+    , uploadRequest =
+        Control.record Dropbox.UploadRequest
+            |> Control.field "path" (Control.string "/elm-dropbox-demo.txt")
+            |> Control.field "mode"
+                (Control.choice
+                    [ ( "Add", Control.value Dropbox.Add )
+                    , ( "Overwrite", Control.value Dropbox.Overwrite )
+                    , ( "Update rev", Control.map Dropbox.Update <| Control.string "123abcdef" )
+                    ]
+                )
+            |> Control.field "autorename" (Control.bool False)
+            |> Control.field "clientModified"
+                (Control.maybe False <| Control.date <| Date.fromTime 0)
+            |> Control.field "mute" (Control.bool False)
+            |> Control.field "content" (Control.string "HELLO.")
+    , downloadRequest =
+        Control.record Dropbox.DownloadRequest
+            |> Control.field "path" (Control.string "/elm-dropbox-demo.txt")
     , clientId =
         if location.host == "avh4.github.io" then
             "cackwvfdggogoes"
@@ -42,7 +60,8 @@ type Msg
     | WriteFile Dropbox.UserAuth
     | ReadFile Dropbox.UserAuth
     | DebugResult String
-    | ChangeWriteFilename String
+    | ChangeUploadRequest (Control Dropbox.UploadRequest)
+    | ChangeDownloadRequest (Control Dropbox.DownloadRequest)
     | ChangeAppId String
     | Logout Dropbox.UserAuth
     | LogoutResponse (Result Http.Error ())
@@ -79,21 +98,14 @@ update msg model =
         WriteFile auth ->
             ( model
             , Dropbox.upload auth
-                { path = model.writeFilename
-                , mode = Dropbox.Add
-                , autorename = False
-                , clientModified = Nothing
-                , mute = False
-                , content = "HELLO."
-                }
+                (Control.currentValue model.uploadRequest)
                 |> Task.attempt (toString >> DebugResult)
             )
 
         ReadFile auth ->
             ( model
             , Dropbox.download auth
-                { path = model.writeFilename
-                }
+                (Control.currentValue model.downloadRequest)
                 |> Task.attempt (toString >> DebugResult)
             )
 
@@ -102,8 +114,13 @@ update msg model =
             , Cmd.none
             )
 
-        ChangeWriteFilename filename ->
-            ( { model | writeFilename = filename }
+        ChangeUploadRequest uploadRequest ->
+            ( { model | uploadRequest = uploadRequest }
+            , Cmd.none
+            )
+
+        ChangeDownloadRequest downloadRequest ->
+            ( { model | downloadRequest = downloadRequest }
             , Cmd.none
             )
 
@@ -198,21 +215,13 @@ startAuth =
                     [ text "Dropbox API v2 documentation" ]
                 ]
             , h4 [] [ text "files/upload" ]
-            , input
-                [ onInput ChangeWriteFilename
-                , defaultValue model.writeFilename
-                ]
-                []
+            , Control.view ChangeUploadRequest model.uploadRequest
             , button
                 [ onClick (WriteFile auth) ]
                 [ text "Upload" ]
             , hr [] []
             , h4 [] [ text "files/download" ]
-            , input
-                [ onInput ChangeWriteFilename
-                , defaultValue model.writeFilename
-                ]
-                []
+            , Control.view ChangeDownloadRequest model.downloadRequest
             , button
                 [ onClick (ReadFile auth) ]
                 [ text "download" ]
