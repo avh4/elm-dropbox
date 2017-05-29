@@ -15,6 +15,7 @@ import Task
 
 type alias Model =
     { debug : String
+    , authorizeRequest : Control Dropbox.AuthorizeRequest
     , uploadRequest : Control Dropbox.UploadRequest
     , downloadRequest : Control Dropbox.DownloadRequest
     , clientId : String
@@ -26,6 +27,15 @@ type alias Model =
 initialModel : Navigation.Location -> Model
 initialModel location =
     { debug = ""
+    , authorizeRequest =
+        Control.record Dropbox.AuthorizeRequest
+            |> Control.field "clientId" (Control.value "(specified above in step 1)")
+            |> Control.field "state" (Control.maybe False <| Control.string "")
+            |> Control.field "requireRole" (Control.maybe False <| Control.values [ Dropbox.Personal, Dropbox.Work ])
+            |> Control.field "forceReapprove" (Control.bool False)
+            |> Control.field "disableSignup" (Control.bool False)
+            |> Control.field "locale" (Control.maybe False <| Control.string "en")
+            |> Control.field "forceReauthentication" (Control.bool False)
     , uploadRequest =
         Control.record Dropbox.UploadRequest
             |> Control.field "path" (Control.string "/elm-dropbox-demo.txt")
@@ -60,6 +70,7 @@ type Msg
     | WriteFile Dropbox.UserAuth
     | ReadFile Dropbox.UserAuth
     | DebugResult String
+    | ChangeAuthorizeRequest (Control Dropbox.AuthorizeRequest)
     | ChangeUploadRequest (Control Dropbox.UploadRequest)
     | ChangeDownloadRequest (Control Dropbox.DownloadRequest)
     | ChangeAppId String
@@ -69,14 +80,11 @@ type Msg
 
 authRequest : Model -> Dropbox.AuthorizeRequest
 authRequest model =
-    { clientId = model.clientId
-    , state = Nothing
-    , requireRole = Nothing
-    , forceReapprove = False
-    , disableSignup = False
-    , locale = Nothing
-    , forceReauthentication = False
-    }
+    let
+        controlValue =
+            Control.currentValue model.authorizeRequest
+    in
+    { controlValue | clientId = model.clientId }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -114,15 +122,14 @@ update msg model =
             , Cmd.none
             )
 
+        ChangeAuthorizeRequest authorizeRequest ->
+            ( { model | authorizeRequest = authorizeRequest }, Cmd.none )
+
         ChangeUploadRequest uploadRequest ->
-            ( { model | uploadRequest = uploadRequest }
-            , Cmd.none
-            )
+            ( { model | uploadRequest = uploadRequest }, Cmd.none )
 
         ChangeDownloadRequest downloadRequest ->
-            ( { model | downloadRequest = downloadRequest }
-            , Cmd.none
-            )
+            ( { model | downloadRequest = downloadRequest }, Cmd.none )
 
         ChangeAppId appId ->
             ( { model | clientId = appId }
@@ -185,6 +192,7 @@ startAuth =
         , forceReauthentication = False
         }
         model.location""" ]
+        , Control.view ChangeAuthorizeRequest model.authorizeRequest
         , p []
             [ text "For this example, the redirect URL is "
             , code
