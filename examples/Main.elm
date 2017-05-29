@@ -247,7 +247,7 @@ main =
                     { title = "elm-dropbox"
                     , details =
                         Just """Unofficial Dropbox API for Elm."""
-                    , color = Just Color.lightBlue
+                    , color = Just <| Color.rgb 40 136 222
                     , maxWidth = 600
                     , githubUrl = Just "https://github.com/avh4/elm-dropbox"
                     , documentationUrl = Just "http://package.elm-lang.org/packages/avh4/elm-dropbox/latest"
