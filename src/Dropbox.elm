@@ -24,9 +24,11 @@ module Dropbox
         , VideoMetadata
         , WriteError(..)
         , WriteMode(..)
+        , authorizationFromAccessToken
         , authorizationUrl
         , authorize
         , download
+        , parseAuthorizeResult
         , program
         , redirectUriFromLocation
         , tokenRevoke
@@ -47,7 +49,7 @@ See the official Dropbox documentation at
 ### Authorization
 
 @docs AuthorizeRequest, Role, authorize, AuthorizeResult, AuthorizeError, UserAuth
-@docs authorizationUrl, redirectUriFromLocation
+@docs authorizationUrl, redirectUriFromLocation, authorizationFromAccessToken, parseAuthorizeResult
 
 
 ### Auth
@@ -110,7 +112,7 @@ type Role
 the redirect URL.
 
 You can get the `AuthorizeResult` by using `Dropbox.program`,
-or by using `parseAuth` if you need to manually parse the redirect URL.
+or by using `parseAuthorizeResult` if you need to manually parse the redirect URL.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 
@@ -215,8 +217,14 @@ authorize request location =
         authorizationUrl request (redirectUriFromLocation location)
 
 
-parseAuth : Navigation.Location -> Maybe AuthorizeResult
-parseAuth location =
+{-| Read an `AuthorizeResult` from the page location.
+
+Typically you will want to use [`Dropbox.program`](#program) instead, which will do this automatically.
+You may want to use this if you need to manually manage the OAuth flow.
+
+-}
+parseAuthorizeResult : Navigation.Location -> Maybe AuthorizeResult
+parseAuthorizeResult location =
     let
         isKeyValue list =
             case list of
@@ -295,6 +303,19 @@ authorization tokenType accessToken =
 
         _ ->
             Nothing
+
+
+{-| Create a `UserAuth` from a Dropbox access token.
+
+You can use this during development, using the "generated access token" from the settings page of [your Dropbox app](https://www.dropbox.com/developers/apps).
+
+You should not sure this in a production app.
+Instead, you should use the normal authorization flow and use [`program`](#program) or [`parseAuthorizeResult`](#parseAuthorizeResult).
+
+-}
+authorizationFromAccessToken : String -> UserAuth
+authorizationFromAccessToken accessToken =
+    Bearer accessToken
 
 
 authHeader : UserAuth -> Http.Header
@@ -870,7 +891,7 @@ program config =
     Navigation.program (always <| Msg Nothing)
         { init =
             \location ->
-                case parseAuth location of
+                case parseAuthorizeResult location of
                     Nothing ->
                         config.init location
                             |> Update.Extra.mapCmd (Msg << Just)
