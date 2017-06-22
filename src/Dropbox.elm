@@ -27,12 +27,19 @@ module Dropbox
         , authorizationFromAccessToken
         , authorizationUrl
         , authorize
+        , authorizeRequest
         , download
         , parseAuthorizeResult
         , program
         , redirectUriFromLocation
         , tokenRevoke
         , upload
+        , withDisableSignup
+        , withForceReapprove
+        , withForceReauthentication
+        , withLocale
+        , withRequireRole
+        , withState
         )
 
 {-|
@@ -50,6 +57,11 @@ See the official Dropbox documentation at
 
 @docs AuthorizeRequest, Role, authorize, AuthorizeResult, AuthorizeError, UserAuth
 @docs authorizationUrl, redirectUriFromLocation, authorizationFromAccessToken, parseAuthorizeResult
+
+
+### Authorization request building
+
+@docs authorizeRequest, withDisableSignup, withForceReapprove, withForceReauthentication, withLocale, withRequireRole, withState
 
 
 ### Auth
@@ -106,6 +118,82 @@ type alias AuthorizeRequest =
 type Role
     = Personal
     | Work
+
+
+{-| Create a default set of request parameters for Dropbox OAuth 2.0 authorization requests[1], with a provided clientId.
+
+Current defaults:
+
+    { clientId = clientId
+    , state = Nothing
+    , requireRole = Nothing
+    , forceReapprove = False
+    , disableSignup = False
+    , locale = Nothing
+    , forceReauthentication = False
+    }
+
+The builder API allows overriding defaults one by one.
+
+    authorizeRequest "my-client-id"
+        |> withRequireRole Personal
+        |> withDisableSignup True
+
+[1]: https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize
+
+-}
+authorizeRequest : String -> AuthorizeRequest
+authorizeRequest clientId =
+    { clientId = clientId
+    , state = Nothing
+    , requireRole = Nothing
+    , forceReapprove = False
+    , disableSignup = False
+    , locale = Nothing
+    , forceReauthentication = False
+    }
+
+
+{-| Override the `state` field in an authorization request.
+-}
+withState : Maybe String -> AuthorizeRequest -> AuthorizeRequest
+withState state authorizeRequest =
+    { authorizeRequest | state = state }
+
+
+{-| Override the `requireRole` field in an authorization request.
+-}
+withRequireRole : Maybe Role -> AuthorizeRequest -> AuthorizeRequest
+withRequireRole role authorizeRequest =
+    { authorizeRequest | requireRole = role }
+
+
+{-| Override the `forceReapprove` field in an authorization request.
+-}
+withForceReapprove : Bool -> AuthorizeRequest -> AuthorizeRequest
+withForceReapprove forceReapprove authorizeRequest =
+    { authorizeRequest | forceReapprove = forceReapprove }
+
+
+{-| Override the `disableSignup` field in an authorization request.
+-}
+withDisableSignup : Bool -> AuthorizeRequest -> AuthorizeRequest
+withDisableSignup disableSignup authorizeRequest =
+    { authorizeRequest | disableSignup = disableSignup }
+
+
+{-| Override the `locale` field in an authorization request.
+-}
+withLocale : Maybe String -> AuthorizeRequest -> AuthorizeRequest
+withLocale locale authorizeRequest =
+    { authorizeRequest | locale = locale }
+
+
+{-| Override the `forceReauthentication` field in an authorization request.
+-}
+withForceReauthentication : Bool -> AuthorizeRequest -> AuthorizeRequest
+withForceReauthentication forceReauthentication authorizeRequest =
+    { authorizeRequest | forceReauthentication = forceReauthentication }
 
 
 {-| Return value of the `authorize` endpoint, which is the data Dropbox returns via
