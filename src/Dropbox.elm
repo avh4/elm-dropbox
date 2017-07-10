@@ -3,22 +3,28 @@ module Dropbox
         ( AuthorizeError
         , AuthorizeRequest
         , AuthorizeResult(..)
+        , DeletedMetadata
         , Dimensions
         , DownloadError(..)
         , DownloadRequest
         , DownloadResponse
+        , FileMetadata
         , FileSharingInfo
+        , FolderMetadata
         , GpsCoordinates
+        , ListFolderError
+        , ListFolderRequest
+        , ListFolderResponse
         , LookupError(..)
         , MediaInfo
         , MediaMetadata
+        , Metadata
         , Msg
         , PhotoMetadata
         , PropertyGroup
         , Role(..)
         , UploadError(..)
         , UploadRequest
-        , UploadResponse
         , UploadWriteFailed
         , UserAuth
         , VideoMetadata
@@ -28,6 +34,7 @@ module Dropbox
         , authorizationUrl
         , authorize
         , download
+        , listFolder
         , parseAuthorizeResult
         , program
         , redirectUriFromLocation
@@ -59,8 +66,10 @@ See the official Dropbox documentation at
 
 ### Files
 
+@docs Metadata, FileMetadata, FolderMetadata, DeletedMetadata
 @docs download, DownloadRequest, DownloadResponse, DownloadError, LookupError
-@docs upload, UploadRequest, WriteMode, UploadResponse, UploadError, UploadWriteFailed, WriteError
+@docs upload, UploadRequest, WriteMode, UploadError, UploadWriteFailed, WriteError
+@docs listFolder, ListFolderRequest, ListFolderResponse, ListFolderError
 
 @docs MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
 
@@ -696,13 +705,13 @@ decodePropertyGroup =
         |> Pipeline.required "fields" (Json.Decode.map Dict.fromList <| Json.Decode.list decodeField)
 
 
-{-| Return value for `upload`
+{-| File metadata
 
 **WARNING**: elm-dropbox may give the incorrect values for `size`,
 since Elm currently does not provide a way to parse and represent 64-bit integers.
 
 -}
-type alias UploadResponse =
+type alias FileMetadata =
     { name : String
     , id : String
     , clientModified : Date
@@ -720,9 +729,41 @@ type alias UploadResponse =
     }
 
 
-decodeUploadResponse : Json.Decode.Decoder UploadResponse
-decodeUploadResponse =
-    Pipeline.decode UploadResponse
+{-| Folder metadata
+-}
+type alias FolderMetadata =
+    { name : String
+    , id : String
+    , pathLower : Maybe String
+    , pathDisplay : Maybe String
+    , parentSharedFolderId : Maybe String
+    , sharedFolderId : Maybe String
+    , sharingInfo : Maybe FileSharingInfo
+    , propertyGroups : Maybe (List PropertyGroup)
+    }
+
+
+{-| Deleted item metadata
+-}
+type alias DeletedMetadata =
+    { name : String
+    , pathLower : Maybe String
+    , pathDisplay : Maybe String
+    , parentSharedFolderId : Maybe String
+    }
+
+
+{-| Metadata union type
+-}
+type Metadata
+    = FileMeta FileMetadata
+    | FolderMeta FolderMetadata
+    | DeletedMeta DeletedMetadata
+
+
+decodeFileMetadata : Json.Decode.Decoder FileMetadata
+decodeFileMetadata =
+    Pipeline.decode FileMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
         |> Pipeline.required "client_modified" Json.Decode.Extra.date
@@ -737,6 +778,28 @@ decodeUploadResponse =
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
         |> optional "has_explicit_shared_members" Json.Decode.bool
         |> optional "content_hash" Json.Decode.string
+
+
+decodeFolderMetadata : Json.Decode.Decoder FolderMetadata
+decodeFolderMetadata =
+    Pipeline.decode FolderMetadata
+        |> Pipeline.required "name" Json.Decode.string
+        |> Pipeline.required "id" Json.Decode.string
+        |> optional "path_lower" Json.Decode.string
+        |> optional "path_display" Json.Decode.string
+        |> optional "parent_shared_folder_id" Json.Decode.string
+        |> optional "shared_folder_id" Json.Decode.string
+        |> optional "sharing_info" decodeFileSharingInfo
+        |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
+
+
+decodeDeletedMetadata : Json.Decode.Decoder DeletedMetadata
+decodeDeletedMetadata =
+    Pipeline.decode DeletedMetadata
+        |> Pipeline.required "name" Json.Decode.string
+        |> optional "path_lower" Json.Decode.string
+        |> optional "path_display" Json.Decode.string
+        |> optional "parent_shared_folder_id" Json.Decode.string
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -817,7 +880,7 @@ decodeWriteConflictError =
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
 
 -}
-upload : UserAuth -> UploadRequest -> Task UploadError UploadResponse
+upload : UserAuth -> UploadRequest -> Task UploadError FileMetadata
 upload auth info =
     let
         url =
@@ -861,7 +924,148 @@ upload auth info =
             ]
         , url = url
         , body = body
-        , expect = Http.expectJson decodeUploadResponse
+        , expect = Http.expectJson decodeFileMetadata
+        , timeout = Nothing
+        , withCredentials = False
+        }
+        |> Http.toTask
+        |> Task.mapError decodeError
+
+
+{-| Request parameters for `listFolder`
+-}
+type alias ListFolderRequest =
+    { path : String
+    , recursive : Bool
+    , includeMediaInfo : Bool
+    , includeDeleted : Bool
+    , includeHasExplicitSharedMembers : Bool
+    }
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder>
+-}
+type ListFolderError
+    = PathListError LookupError
+    | ExpiredCursorError
+    | OtherListError String Json.Encode.Value
+    | OtherListFailure Http.Error
+
+
+decodeListError : Json.Decode.Decoder ListFolderError
+decodeListError =
+    Json.Decode.field "error" <|
+        openUnion OtherListError
+            [ tagValue "path" PathListError decodeLookupError
+            , tagVoid "reset" ExpiredCursorError
+            ]
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder>
+-}
+type alias ListFolderResponse =
+    { entries : List Metadata
+    , cursor : String
+    , hasMore : Bool
+    }
+
+
+decodeListResponse : Json.Decode.Decoder ListFolderResponse
+decodeListResponse =
+    Pipeline.decode ListFolderResponse
+        |> Pipeline.required "entries"
+            (Json.Decode.list
+                (Json.Decode.oneOf
+                    [ Json.Decode.map FileMeta decodeFileMetadata
+                    , Json.Decode.map FolderMeta decodeFolderMetadata
+                    , Json.Decode.map DeletedMeta decodeDeletedMetadata
+                    ]
+                )
+            )
+        |> Pipeline.required "cursor" Json.Decode.string
+        |> Pipeline.required "has_more" Json.Decode.bool
+
+
+{-| Begin listing the contents of a folder.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder>
+
+-}
+listFolder : UserAuth -> ListFolderRequest -> Task ListFolderError ListFolderResponse
+listFolder auth options =
+    let
+        url =
+            "https://api.dropboxapi.com/2/files/list_folder"
+
+        body =
+            Json.Encode.encode 0 <|
+                Json.Encode.object <|
+                    [ ( "path", Json.Encode.string options.path )
+                    , ( "recursive", Json.Encode.bool options.recursive )
+                    , ( "include_media_info", Json.Encode.bool options.includeMediaInfo )
+                    , ( "include_deleted", Json.Encode.bool options.includeDeleted )
+                    , ( "include_has_explicit_shared_members", Json.Encode.bool options.includeHasExplicitSharedMembers )
+                    ]
+
+        decodeError err =
+            case err of
+                Http.BadStatus response ->
+                    case Json.Decode.decodeString decodeListError response.body of
+                        Ok err ->
+                            err
+
+                        Err _ ->
+                            OtherListFailure err
+
+                _ ->
+                    OtherListFailure err
+    in
+    Http.request
+        { method = "POST"
+        , headers =
+            [ authHeader auth ]
+        , url = url
+        , body = Http.stringBody "application/json" body
+        , expect = Http.expectJson decodeListResponse
+        , timeout = Nothing
+        , withCredentials = False
+        }
+        |> Http.toTask
+        |> Task.mapError decodeError
+
+
+listFolderContinue : UserAuth -> ListFolderResponse -> Task ListFolderError ListFolderResponse
+listFolderContinue auth lastResult =
+    let
+        url =
+            "https://api.dropboxapi.com/2/files/list_folder/continue"
+
+        body =
+            Json.Encode.encode 0 <|
+                Json.Encode.object <|
+                    [ ( "cursor", Json.Encode.string lastResult.cursor )
+                    ]
+
+        decodeError err =
+            case err of
+                Http.BadStatus response ->
+                    case Json.Decode.decodeString decodeListError response.body of
+                        Ok err ->
+                            err
+
+                        Err _ ->
+                            OtherListFailure err
+
+                _ ->
+                    OtherListFailure err
+    in
+    Http.request
+        { method = "POST"
+        , headers =
+            [ authHeader auth ]
+        , url = url
+        , body = Http.stringBody "application/json" body
+        , expect = Http.expectJson decodeListResponse
         , timeout = Nothing
         , withCredentials = False
         }
