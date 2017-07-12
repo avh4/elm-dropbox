@@ -12,6 +12,7 @@ module Dropbox
         , FileSharingInfo
         , FolderMetadata
         , GpsCoordinates
+        , ListFolderContinueError(..)
         , ListFolderError(..)
         , ListFolderRequest
         , ListFolderResponse
@@ -35,6 +36,7 @@ module Dropbox
         , authorize
         , download
         , listFolder
+        , listFolderContinue
         , parseAuthorizeResult
         , program
         , redirectUriFromLocation
@@ -69,7 +71,7 @@ See the official Dropbox documentation at
 @docs Metadata, FileMetadata, FolderMetadata, DeletedMetadata
 @docs download, DownloadRequest, DownloadResponse, DownloadError, LookupError
 @docs upload, UploadRequest, WriteMode, UploadError, UploadWriteFailed, WriteError
-@docs listFolder, ListFolderRequest, ListFolderResponse, ListFolderError
+@docs listFolder, listFolderContinue, ListFolderRequest, ListFolderResponse, ListFolderError, ListFolderContinueError
 
 @docs MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
 
@@ -947,7 +949,6 @@ type alias ListFolderRequest =
 -}
 type ListFolderError
     = PathListError LookupError
-    | ExpiredCursorError
     | OtherListError String Json.Encode.Value
     | OtherListFailure Http.Error
 
@@ -957,7 +958,6 @@ decodeListError =
     Json.Decode.field "error" <|
         openUnion OtherListError
             [ tagValue "path" PathListError decodeLookupError
-            , tagVoid "reset" ExpiredCursorError
             ]
 
 
@@ -1034,7 +1034,27 @@ listFolder auth options =
         |> Task.mapError decodeError
 
 
-listFolderContinue : UserAuth -> { cursor : String } -> Task ListFolderError ListFolderResponse
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
+-}
+type ListFolderContinueError
+    = PathListContinueError LookupError
+    | ExpiredCursorError
+    | OtherListContinueError String Json.Encode.Value
+    | OtherListContinueFailure Http.Error
+
+
+decodeListContinueError : Json.Decode.Decoder ListFolderContinueError
+decodeListContinueError =
+    Json.Decode.field "error" <|
+        openUnion OtherListContinueError
+            [ tagValue "path" PathListContinueError decodeLookupError
+            , tagVoid "reset" ExpiredCursorError
+            ]
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
+-}
+listFolderContinue : UserAuth -> { cursor : String } -> Task ListFolderContinueError ListFolderResponse
 listFolderContinue auth cursorInfo =
     let
         url =
@@ -1049,15 +1069,15 @@ listFolderContinue auth cursorInfo =
         decodeError err =
             case err of
                 Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeListError response.body of
+                    case Json.Decode.decodeString decodeListContinueError response.body of
                         Ok err ->
                             err
 
                         Err _ ->
-                            OtherListFailure err
+                            OtherListContinueFailure err
 
                 _ ->
-                    OtherListFailure err
+                    OtherListContinueFailure err
     in
     Http.request
         { method = "POST"
