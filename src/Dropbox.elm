@@ -12,13 +12,13 @@ module Dropbox
         , FileSharingInfo
         , FolderMetadata
         , GpsCoordinates
-        , ListFolderError
+        , ListFolderError(..)
         , ListFolderRequest
         , ListFolderResponse
         , LookupError(..)
         , MediaInfo
         , MediaMetadata
-        , Metadata
+        , Metadata(..)
         , Msg
         , PhotoMetadata
         , PropertyGroup
@@ -1034,8 +1034,8 @@ listFolder auth options =
         |> Task.mapError decodeError
 
 
-listFolderContinue : UserAuth -> ListFolderResponse -> Task ListFolderError ListFolderResponse
-listFolderContinue auth lastResult =
+listFolderContinue : UserAuth -> { cursor : String } -> Task ListFolderError ListFolderResponse
+listFolderContinue auth cursorInfo =
     let
         url =
             "https://api.dropboxapi.com/2/files/list_folder/continue"
@@ -1043,7 +1043,7 @@ listFolderContinue auth lastResult =
         body =
             Json.Encode.encode 0 <|
                 Json.Encode.object <|
-                    [ ( "cursor", Json.Encode.string lastResult.cursor )
+                    [ ( "cursor", Json.Encode.string cursorInfo.cursor )
                     ]
 
         decodeError err =
