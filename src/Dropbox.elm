@@ -27,7 +27,9 @@ module Dropbox
         , authorizationFromAccessToken
         , authorizationUrl
         , authorize
+        , decodeUserAuth
         , download
+        , encodeUserAuth
         , parseAuthorizeResult
         , program
         , redirectUriFromLocation
@@ -48,7 +50,7 @@ See the official Dropbox documentation at
 
 ### Authorization
 
-@docs AuthorizeRequest, Role, authorize, AuthorizeResult, AuthorizeError, UserAuth
+@docs AuthorizeRequest, Role, authorize, AuthorizeResult, AuthorizeError, UserAuth, encodeUserAuth, decodeUserAuth
 @docs authorizationUrl, redirectUriFromLocation, authorizationFromAccessToken, parseAuthorizeResult
 
 
@@ -295,6 +297,43 @@ type UserAuth
     = Bearer String
 
 
+{-| Encode a `UserAuth` to JSON.
+
+You should consider the resulting value to be opaque
+and only read it using `decodeUserAuth`.
+
+WARNING: To protect your users' security,
+you must not transmit the resulting value off the user's device.
+This function exists to allow persisting the auth token to localStorage
+or other storage that is local to the user's device _and_ private to your application.
+You should not send this value to your own server
+(if you think you need that, you should use a different OAuth flow
+involving your Dropox app's app secret instead of using implicit grant).
+
+-}
+encodeUserAuth : UserAuth -> Json.Encode.Value
+encodeUserAuth auth =
+    case auth of
+        Bearer authToken ->
+            Json.Encode.object
+                [ ( "dropbox", Json.Encode.string authToken )
+                ]
+
+
+{-| Decode a `UserAuth` encoded with `encodeUserAuth`.
+
+NOTE: See the security warning in `encodeUserAuth`.
+
+If you have an auth token as a String and need to convert it to a `UserAuth`,
+see [`authorizationFromAccessToken`](#authorizationFromAccessToken).
+
+-}
+decodeUserAuth : Json.Decode.Decoder UserAuth
+decodeUserAuth =
+    Json.Decode.field "dropbox" Json.Decode.string
+        |> Json.Decode.map Bearer
+
+
 authorization : String -> String -> Maybe UserAuth
 authorization tokenType accessToken =
     case tokenType of
@@ -309,7 +348,7 @@ authorization tokenType accessToken =
 
 You can use this during development, using the "generated access token" from the settings page of [your Dropbox app](https://www.dropbox.com/developers/apps).
 
-You should not sure this in a production app.
+You should not use this in a production app.
 Instead, you should use the normal authorization flow and use [`program`](#program) or [`parseAuthorizeResult`](#parseAuthorizeResult).
 
 -}
