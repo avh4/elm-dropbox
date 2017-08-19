@@ -28014,6 +28014,19 @@ var _user$project$Dropbox$tokenRevoke = function (auth) {
 			withCredentials: false
 		});
 };
+var _user$project$Dropbox$encodeUserAuth = function (auth) {
+	var _p2 = auth;
+	return _elm_lang$core$Json_Encode$object(
+		{
+			ctor: '::',
+			_0: {
+				ctor: '_Tuple2',
+				_0: 'dropbox',
+				_1: _elm_lang$core$Json_Encode$string(_p2._0)
+			},
+			_1: {ctor: '[]'}
+		});
+};
 var _user$project$Dropbox$redirectUriFromLocation = function (location) {
 	return A2(
 		_elm_lang$core$Basics_ops['++'],
@@ -28026,16 +28039,16 @@ var _user$project$Dropbox$redirectUriFromLocation = function (location) {
 var _user$project$Dropbox$authorizationUrl = F2(
 	function (request, redirectUri) {
 		var boolToString = function (bool) {
-			var _p2 = bool;
-			if (_p2 === true) {
+			var _p3 = bool;
+			if (_p3 === true) {
 				return 'true';
 			} else {
 				return 'false';
 			}
 		};
 		var roleToString = function (role) {
-			var _p3 = role;
-			if (_p3.ctor === 'Personal') {
+			var _p4 = role;
+			if (_p4.ctor === 'Personal') {
 				return 'personal';
 			} else {
 				return 'work';
@@ -28085,11 +28098,11 @@ var _user$project$Dropbox$authorizationUrl = F2(
 													ctor: '::',
 													_0: A2(
 														_elm_lang$core$Maybe$map,
-														function (_p4) {
+														function (_p5) {
 															return A2(
 																param,
 																'require_role',
-																roleToString(_p4));
+																roleToString(_p5));
 														},
 														request.requireRole),
 													_1: {
@@ -28342,17 +28355,21 @@ var _user$project$Dropbox$DropboxAuthorizeErr = function (a) {
 var _user$project$Dropbox$Bearer = function (a) {
 	return {ctor: 'Bearer', _0: a};
 };
+var _user$project$Dropbox$decodeUserAuth = A2(
+	_elm_lang$core$Json_Decode$map,
+	_user$project$Dropbox$Bearer,
+	A2(_elm_lang$core$Json_Decode$field, 'dropbox', _elm_lang$core$Json_Decode$string));
 var _user$project$Dropbox$authorization = F2(
 	function (tokenType, accessToken) {
-		var _p5 = tokenType;
-		if (_p5 === 'bearer') {
+		var _p6 = tokenType;
+		if (_p6 === 'bearer') {
 			return _elm_lang$core$Maybe$Just(
 				_user$project$Dropbox$Bearer(accessToken));
 		} else {
 			return _elm_lang$core$Maybe$Nothing;
 		}
 	});
-var _user$project$Dropbox$parseAuth = function (location) {
+var _user$project$Dropbox$parseAuthorizeResult = function (location) {
 	var makeError = function (dict) {
 		return A2(
 			_elm_lang$core$Maybe$map,
@@ -28371,8 +28388,8 @@ var _user$project$Dropbox$parseAuth = function (location) {
 	};
 	var makeSuccess = F4(
 		function (dict, accessToken, tokenType, accountId) {
-			var _p6 = A2(_user$project$Dropbox$authorization, tokenType, accessToken);
-			if (_p6.ctor === 'Nothing') {
+			var _p7 = A2(_user$project$Dropbox$authorization, tokenType, accessToken);
+			if (_p7.ctor === 'Nothing') {
 				return _user$project$Dropbox$UnknownAccessTokenErr(
 					{
 						accessToken: accessToken,
@@ -28383,7 +28400,7 @@ var _user$project$Dropbox$parseAuth = function (location) {
 			} else {
 				return _user$project$Dropbox$AuthorizeOk(
 					{
-						userAuth: _p6._0,
+						userAuth: _p7._0,
 						accountId: accountId,
 						state: A2(_elm_lang$core$Dict$get, 'state', dict)
 					});
@@ -28398,10 +28415,10 @@ var _user$project$Dropbox$parseAuth = function (location) {
 			A2(_elm_lang$core$Dict$get, 'account_id', dict));
 	};
 	var isKeyValue = function (list) {
-		var _p7 = list;
-		if (((_p7.ctor === '::') && (_p7._1.ctor === '::')) && (_p7._1._1.ctor === '[]')) {
+		var _p8 = list;
+		if (((_p8.ctor === '::') && (_p8._1.ctor === '::')) && (_p8._1._1.ctor === '[]')) {
 			return _elm_lang$core$Maybe$Just(
-				{ctor: '_Tuple2', _0: _p7._0, _1: _p7._1._0});
+				{ctor: '_Tuple2', _0: _p8._0, _1: _p8._1._0});
 		} else {
 			return _elm_lang$core$Maybe$Nothing;
 		}
@@ -28416,21 +28433,24 @@ var _user$project$Dropbox$parseAuth = function (location) {
 					_elm_lang$core$String$split('='),
 					A2(_elm_lang$core$String$split, '&', hash))));
 	};
-	var _p8 = _elm_lang$core$String$uncons(location.hash);
-	if (((_p8.ctor === 'Just') && (_p8._0.ctor === '_Tuple2')) && (_p8._0._0.valueOf() === '#')) {
-		var _p11 = _p8._0._1;
+	var _p9 = _elm_lang$core$String$uncons(location.hash);
+	if (((_p9.ctor === 'Just') && (_p9._0.ctor === '_Tuple2')) && (_p9._0._0.valueOf() === '#')) {
+		var _p12 = _p9._0._1;
 		return A2(
 			_elm_community$maybe_extra$Maybe_Extra$orElseLazy,
-			function (_p9) {
-				var _p10 = _p9;
+			function (_p10) {
+				var _p11 = _p10;
 				return makeError(
-					params(_p11));
+					params(_p12));
 			},
 			makeAuth(
-				params(_p11)));
+				params(_p12)));
 	} else {
 		return _elm_lang$core$Maybe$Nothing;
 	}
+};
+var _user$project$Dropbox$authorizationFromAccessToken = function (accessToken) {
+	return _user$project$Dropbox$Bearer(accessToken);
 };
 var _user$project$Dropbox$OtherDownloadFailure = function (a) {
 	return {ctor: 'OtherDownloadFailure', _0: a};
@@ -28576,11 +28596,11 @@ var _user$project$Dropbox$decodeDownloadResponse = function (content) {
 var _user$project$Dropbox$download = F2(
 	function (auth, info) {
 		var decodeError = function (err) {
-			var _p12 = err;
-			if (_p12.ctor === 'BadStatus') {
-				var _p13 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeDownloadError, _p12._0.body);
-				if (_p13.ctor === 'Ok') {
-					return _p13._0;
+			var _p13 = err;
+			if (_p13.ctor === 'BadStatus') {
+				var _p14 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeDownloadError, _p13._0.body);
+				if (_p14.ctor === 'Ok') {
+					return _p14._0;
 				} else {
 					return _user$project$Dropbox$OtherDownloadFailure(err);
 				}
@@ -28602,14 +28622,14 @@ var _user$project$Dropbox$download = F2(
 					_1: {ctor: '[]'}
 				}));
 		var parse = function (response) {
-			var _p14 = A2(_elm_lang$core$Dict$get, 'dropbox-api-result', response.headers);
-			if (_p14.ctor === 'Nothing') {
+			var _p15 = A2(_elm_lang$core$Dict$get, 'dropbox-api-result', response.headers);
+			if (_p15.ctor === 'Nothing') {
 				return _elm_lang$core$Result$Err('No dropbox-api-result header found');
 			} else {
 				return A2(
 					_elm_lang$core$Json_Decode$decodeString,
 					_user$project$Dropbox$decodeDownloadResponse(response.body),
-					_p14._0);
+					_p15._0);
 			}
 		};
 		var url = 'https://content.dropboxapi.com/2/files/download';
@@ -28795,11 +28815,11 @@ var _user$project$Dropbox$decodeUploadError = A2(
 var _user$project$Dropbox$upload = F2(
 	function (auth, info) {
 		var decodeError = function (err) {
-			var _p15 = err;
-			if (_p15.ctor === 'BadStatus') {
-				var _p16 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeUploadError, _p15._0.body);
-				if (_p16.ctor === 'Ok') {
-					return _p16._0;
+			var _p16 = err;
+			if (_p16.ctor === 'BadStatus') {
+				var _p17 = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$Dropbox$decodeUploadError, _p16._0.body);
+				if (_p17.ctor === 'Ok') {
+					return _p17._0;
 				} else {
 					return _user$project$Dropbox$OtherUploadFailure(err);
 				}
@@ -28899,56 +28919,56 @@ var _user$project$Dropbox$program = function (config) {
 			_user$project$Dropbox$Msg(_elm_lang$core$Maybe$Nothing)),
 		{
 			init: function (location) {
-				var _p17 = _user$project$Dropbox$parseAuth(location);
-				if (_p17.ctor === 'Nothing') {
-					return A2(
-						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
-						function (_p18) {
-							return _user$project$Dropbox$Msg(
-								_elm_lang$core$Maybe$Just(_p18));
-						},
-						config.init(location));
-				} else {
+				var _p18 = _user$project$Dropbox$parseAuthorizeResult(location);
+				if (_p18.ctor === 'Nothing') {
 					return A2(
 						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
 						function (_p19) {
 							return _user$project$Dropbox$Msg(
 								_elm_lang$core$Maybe$Just(_p19));
 						},
+						config.init(location));
+				} else {
+					return A2(
+						_ccapndave$elm_update_extra$Update_Extra$mapCmd,
+						function (_p20) {
+							return _user$project$Dropbox$Msg(
+								_elm_lang$core$Maybe$Just(_p20));
+						},
 						A3(
 							_ccapndave$elm_update_extra$Update_Extra$andThen,
 							config.update,
-							config.onAuth(_p17._0),
+							config.onAuth(_p18._0),
 							config.init(location)));
 				}
 			},
 			update: F2(
-				function (_p20, model) {
-					var _p21 = _p20;
-					var _p22 = _p21._0;
-					if (_p22.ctor === 'Nothing') {
+				function (_p21, model) {
+					var _p22 = _p21;
+					var _p23 = _p22._0;
+					if (_p23.ctor === 'Nothing') {
 						return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
 					} else {
 						return A2(
 							_ccapndave$elm_update_extra$Update_Extra$mapCmd,
-							function (_p23) {
+							function (_p24) {
 								return _user$project$Dropbox$Msg(
-									_elm_lang$core$Maybe$Just(_p23));
+									_elm_lang$core$Maybe$Just(_p24));
 							},
-							A2(config.update, _p22._0, model));
+							A2(config.update, _p23._0, model));
 					}
 				}),
-			subscriptions: function (_p24) {
+			subscriptions: function (_p25) {
 				return _elm_lang$core$Platform_Sub$none;
 			},
-			view: function (_p25) {
+			view: function (_p26) {
 				return A2(
 					_elm_lang$html$Html$map,
-					function (_p26) {
+					function (_p27) {
 						return _user$project$Dropbox$Msg(
-							_elm_lang$core$Maybe$Just(_p26));
+							_elm_lang$core$Maybe$Just(_p27));
 					},
-					config.view(_p25));
+					config.view(_p26));
 			}
 		});
 };
