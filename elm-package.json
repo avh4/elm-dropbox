@@ -1,5 +1,5 @@
 {
-    "version": "1.2.0",
+    "version": "1.2.1",
     "summary": "Unofficial Dropbox API for Elm",
     "repository": "https://github.com/avh4/elm-dropbox.git",
     "license": "MIT",
