@@ -950,9 +950,6 @@ program config =
                     Just m ->
                         config.update m model
                             |> Update.Extra.mapCmd (Msg << Just)
-        , subscriptions =
-            \model ->
-                config.subscriptions model
-                    |> Sub.map (Msg << Just)
+        , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
         , view = config.view >> Html.map (Msg << Just)
         }
