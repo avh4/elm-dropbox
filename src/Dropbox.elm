@@ -32,6 +32,7 @@ module Dropbox
         , encodeUserAuth
         , parseAuthorizeResult
         , program
+        , programWithFlags
         , redirectUriFromLocation
         , tokenRevoke
         , upload
@@ -45,7 +46,7 @@ module Dropbox
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
 
-@docs program, Msg
+@docs program, programWithFlags, Msg
 
 
 ### Authorization
@@ -927,29 +928,72 @@ program :
     }
     -> Program Never model (Msg msg)
 program config =
-    Navigation.program (always <| Msg Nothing)
-        { init =
-            \location ->
-                case parseAuthorizeResult location of
-                    Nothing ->
-                        config.init location
-                            |> Update.Extra.mapCmd (Msg << Just)
+    let
+        configWithFlags =
+            navigationConfig <|
+                { config | init = \() -> config.init }
+    in
+        Navigation.program (always <| Msg Nothing) <|
+            { configWithFlags | init = configWithFlags.init () }
 
-                    Just response ->
-                        config.init location
-                            |> Update.Extra.andThen
-                                config.update
-                                (config.onAuth response)
-                            |> Update.Extra.mapCmd (Msg << Just)
-        , update =
-            \(Msg msg) model ->
-                case msg of
-                    Nothing ->
-                        ( model, Cmd.none )
 
-                    Just m ->
-                        config.update m model
-                            |> Update.Extra.mapCmd (Msg << Just)
-        , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
-        , view = config.view >> Html.map (Msg << Just)
-        }
+{-| This provides the simplest way to integrate Dropbox authentication with
+flags. Using `Dropbox.programWithFlags` will handle parsing the authentication
+response from the authentication redirect so that you don't have to do it
+manually.
+-}
+programWithFlags :
+    { init : flags -> Navigation.Location -> ( model, Cmd msg )
+    , update : msg -> model -> ( model, Cmd msg )
+    , subscriptions : model -> Sub msg
+    , view : model -> Html msg
+    , onAuth : AuthorizeResult -> msg
+    }
+    -> Program flags model (Msg msg)
+programWithFlags config =
+    Navigation.programWithFlags (always <| Msg Nothing) <|
+        navigationConfig config
+
+
+type alias NavigationConfig flags model msg =
+    { init : flags -> Navigation.Location -> ( model, Cmd msg )
+    , update : msg -> model -> ( model, Cmd msg )
+    , subscriptions : model -> Sub msg
+    , view : model -> Html msg
+    }
+
+
+navigationConfig :
+    { init : flags -> Navigation.Location -> ( model, Cmd msg )
+    , update : msg -> model -> ( model, Cmd msg )
+    , subscriptions : model -> Sub msg
+    , view : model -> Html msg
+    , onAuth : AuthorizeResult -> msg
+    }
+    -> NavigationConfig flags model (Msg msg)
+navigationConfig config =
+    { init =
+        \flags location ->
+            case parseAuthorizeResult location of
+                Nothing ->
+                    config.init flags location
+                        |> Update.Extra.mapCmd (Msg << Just)
+
+                Just response ->
+                    config.init flags location
+                        |> Update.Extra.andThen
+                            config.update
+                            (config.onAuth response)
+                        |> Update.Extra.mapCmd (Msg << Just)
+    , update =
+        \(Msg msg) model ->
+            case msg of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just m ->
+                    config.update m model
+                        |> Update.Extra.mapCmd (Msg << Just)
+    , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
+    , view = config.view >> Html.map (Msg << Just)
+    }
