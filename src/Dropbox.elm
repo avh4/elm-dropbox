@@ -1093,7 +1093,14 @@ decodeListContinueError =
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
 -}
-listFolderContinue : UserAuth -> { cursor : String } -> Task ListFolderContinueError ListFolderResponse
+type alias ListFolderContinueRequest =
+    { cursor : String
+    }
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
+-}
+listFolderContinue : UserAuth -> ListFolderContinueRequest -> Task ListFolderContinueError ListFolderResponse
 listFolderContinue auth cursorInfo =
     let
         url =
