@@ -191,22 +191,22 @@ authorizationUrl request redirectUri =
                 False ->
                     "false"
     in
-    String.concat
-        [ "https://www.dropbox.com/oauth2/authorize"
-        , "?"
-        , String.join "&" <|
-            List.filterMap identity
-                [ Just <| param "response_type" "token"
-                , Just <| param "client_id" request.clientId
-                , Just <| param "redirect_uri" redirectUri
-                , Maybe.map (param "state") request.state
-                , Maybe.map (param "require_role" << roleToString) request.requireRole
-                , Just <| param "force_reapprove" <| boolToString request.forceReapprove
-                , Just <| param "disable_signup" <| boolToString request.disableSignup
-                , Maybe.map (param "locale") request.locale
-                , Just <| param "force_reauthentication" <| boolToString request.forceReauthentication
-                ]
-        ]
+        String.concat
+            [ "https://www.dropbox.com/oauth2/authorize"
+            , "?"
+            , String.join "&" <|
+                List.filterMap identity
+                    [ Just <| param "response_type" "token"
+                    , Just <| param "client_id" request.clientId
+                    , Just <| param "redirect_uri" redirectUri
+                    , Maybe.map (param "state") request.state
+                    , Maybe.map (param "require_role" << roleToString) request.requireRole
+                    , Just <| param "force_reapprove" <| boolToString request.forceReapprove
+                    , Just <| param "disable_signup" <| boolToString request.disableSignup
+                    , Maybe.map (param "locale") request.locale
+                    , Just <| param "force_reauthentication" <| boolToString request.forceReauthentication
+                    ]
+            ]
 
 
 {-| Generate a redirect URI from a `Navigation.Location`.
@@ -291,13 +291,13 @@ parseAuthorizeResult location =
                     )
                 |> Maybe.map DropboxAuthorizeErr
     in
-    case String.uncons location.hash of
-        Just ( '#', hash ) ->
-            makeAuth (params hash)
-                |> Maybe.Extra.orElseLazy (\() -> makeError (params hash))
+        case String.uncons location.hash of
+            Just ( '#', hash ) ->
+                makeAuth (params hash)
+                    |> Maybe.Extra.orElseLazy (\() -> makeError (params hash))
 
-        _ ->
-            Nothing
+            _ ->
+                Nothing
 
 
 {-| A user authentication token that can be used to authenticate API calls
@@ -317,7 +317,7 @@ and only read it using `decodeUserAuth`.
 WARNING: To protect your users' security,
 you must not transmit the resulting value off the user's device.
 This function exists to allow persisting the auth token to localStorage
-or other storage that is local to the user's device _and_ private to your application.
+or other storage that is local to the user's device *and* private to your application.
 You should not send this value to your own server
 (if you think you need that, you should use a different OAuth flow
 involving your Dropox app's app secret instead of using implicit grant).
@@ -390,17 +390,17 @@ tokenRevoke auth =
         parse response =
             Ok ()
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ authHeader auth
-            ]
-        , url = url
-        , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
-        , timeout = Nothing
-        , withCredentials = False
-        }
+        Http.request
+            { method = "POST"
+            , headers =
+                [ authHeader auth
+                ]
+            , url = url
+            , body = Http.emptyBody
+            , expect = Http.expectStringResponse parse
+            , timeout = Nothing
+            , withCredentials = False
+            }
 
 
 {-| Request parameteres for `download`
@@ -530,20 +530,20 @@ download auth info =
                 _ ->
                     OtherDownloadFailure err
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ authHeader auth
-            , Http.header "Dropbox-API-Arg" dropboxArg
-            ]
-        , url = url
-        , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.toTask
-        |> Task.mapError decodeError
+        Http.request
+            { method = "POST"
+            , headers =
+                [ authHeader auth
+                , Http.header "Dropbox-API-Arg" dropboxArg
+                ]
+            , url = url
+            , body = Http.emptyBody
+            , expect = Http.expectStringResponse parse
+            , timeout = Nothing
+            , withCredentials = False
+            }
+            |> Http.toTask
+            |> Task.mapError decodeError
 
 
 {-| Your intent when writing a file to some path.
@@ -723,6 +723,30 @@ decodeFileSharingInfo =
         |> optional "modified_by" Json.Decode.string
 
 
+{-| Sharing info for a folder which is contained by a shared folder.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder>
+
+-}
+type alias FolderSharingInfo =
+    { readOnly : Bool
+    , parentSharedFolderId : Maybe String
+    , sharedFolderId : Maybe String
+    , traverseOnly : Bool
+    , noAccess : Bool
+    }
+
+
+decodeFolderSharingInfo : Json.Decode.Decoder FolderSharingInfo
+decodeFolderSharingInfo =
+    Pipeline.decode FolderSharingInfo
+        |> Pipeline.required "read_only" Json.Decode.bool
+        |> optional "parent_shared_folder_id" Json.Decode.string
+        |> optional "shared_folder_id" Json.Decode.string
+        |> Pipeline.optional "traverse_only" Json.Decode.bool False
+        |> Pipeline.optional "no_access" Json.Decode.bool False
+
+
 {-| Collection of custom properties in filled property templates.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -742,9 +766,9 @@ decodePropertyGroup =
                 (Json.Decode.field "name" Json.Decode.string)
                 (Json.Decode.field "value" Json.Decode.string)
     in
-    Pipeline.decode PropertyGroup
-        |> Pipeline.required "template_id" Json.Decode.string
-        |> Pipeline.required "fields" (Json.Decode.map Dict.fromList <| Json.Decode.list decodeField)
+        Pipeline.decode PropertyGroup
+            |> Pipeline.required "template_id" Json.Decode.string
+            |> Pipeline.required "fields" (Json.Decode.map Dict.fromList <| Json.Decode.list decodeField)
 
 
 {-| File metadata
@@ -780,7 +804,7 @@ type alias FolderMetadata =
     , pathDisplay : Maybe String
     , parentSharedFolderId : Maybe String
     , sharedFolderId : Maybe String
-    , sharingInfo : Maybe FileSharingInfo
+    , sharingInfo : Maybe FolderSharingInfo
     , propertyGroups : Maybe (List PropertyGroup)
     }
 
@@ -831,7 +855,7 @@ decodeFolderMetadata =
         |> optional "path_display" Json.Decode.string
         |> optional "parent_shared_folder_id" Json.Decode.string
         |> optional "shared_folder_id" Json.Decode.string
-        |> optional "sharing_info" decodeFileSharingInfo
+        |> optional "sharing_info" decodeFolderSharingInfo
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
 
 
@@ -958,20 +982,20 @@ upload auth info =
                 _ ->
                     OtherUploadFailure err
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ authHeader auth
-            , Http.header "Dropbox-API-Arg" dropboxArg
-            ]
-        , url = url
-        , body = body
-        , expect = Http.expectJson decodeFileMetadata
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.toTask
-        |> Task.mapError decodeError
+        Http.request
+            { method = "POST"
+            , headers =
+                [ authHeader auth
+                , Http.header "Dropbox-API-Arg" dropboxArg
+                ]
+            , url = url
+            , body = body
+            , expect = Http.expectJson decodeFileMetadata
+            , timeout = Nothing
+            , withCredentials = False
+            }
+            |> Http.toTask
+            |> Task.mapError decodeError
 
 
 {-| Request parameters for `listFolder`
@@ -1015,10 +1039,10 @@ decodeListResponse =
     Pipeline.decode ListFolderResponse
         |> Pipeline.required "entries"
             (Json.Decode.list
-                (Json.Decode.oneOf
-                    [ Json.Decode.map FileMeta decodeFileMetadata
-                    , Json.Decode.map FolderMeta decodeFolderMetadata
-                    , Json.Decode.map DeletedMeta decodeDeletedMetadata
+                (union
+                    [ tagObject "file" FileMeta decodeFileMetadata
+                    , tagObject "folder" FolderMeta decodeFolderMetadata
+                    , tagObject "deleted" DeletedMeta decodeDeletedMetadata
                     ]
                 )
             )
@@ -1060,18 +1084,18 @@ listFolder auth options =
                 _ ->
                     OtherListFailure err
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ authHeader auth ]
-        , url = url
-        , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.toTask
-        |> Task.mapError decodeError
+        Http.request
+            { method = "POST"
+            , headers =
+                [ authHeader auth ]
+            , url = url
+            , body = Http.stringBody "application/json" body
+            , expect = Http.expectJson decodeListResponse
+            , timeout = Nothing
+            , withCredentials = False
+            }
+            |> Http.toTask
+            |> Task.mapError decodeError
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
@@ -1126,18 +1150,18 @@ listFolderContinue auth cursorInfo =
                 _ ->
                     OtherListContinueFailure err
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ authHeader auth ]
-        , url = url
-        , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.toTask
-        |> Task.mapError decodeError
+        Http.request
+            { method = "POST"
+            , headers =
+                [ authHeader auth ]
+            , url = url
+            , body = Http.stringBody "application/json" body
+            , expect = Http.expectJson decodeListResponse
+            , timeout = Nothing
+            , withCredentials = False
+            }
+            |> Http.toTask
+            |> Task.mapError decodeError
 
 
 {-| The message type for an app that uses `Dropbox.program`
