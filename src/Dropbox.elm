@@ -1,51 +1,14 @@
-module Dropbox
-    exposing
-        ( AuthorizeError
-        , AuthorizeRequest
-        , AuthorizeResult(..)
-        , DeletedMetadata
-        , Dimensions
-        , DownloadError(..)
-        , DownloadRequest
-        , DownloadResponse
-        , FileMetadata
-        , FileSharingInfo
-        , FolderMetadata
-        , GpsCoordinates
-        , ListFolderContinueError(..)
-        , ListFolderError(..)
-        , ListFolderRequest
-        , ListFolderResponse
-        , LookupError(..)
-        , MediaInfo
-        , MediaMetadata
-        , Metadata(..)
-        , Msg
-        , PhotoMetadata
-        , PropertyGroup
-        , Role(..)
-        , UploadError(..)
-        , UploadRequest
-        , UploadWriteFailed
-        , UserAuth
-        , VideoMetadata
-        , WriteError(..)
-        , WriteMode(..)
-        , authorizationFromAccessToken
-        , authorizationUrl
-        , authorize
-        , decodeUserAuth
-        , download
-        , encodeUserAuth
-        , listFolder
-        , listFolderContinue
-        , parseAuthorizeResult
-        , program
-        , programWithFlags
-        , redirectUriFromLocation
-        , tokenRevoke
-        , upload
-        )
+module Dropbox exposing
+    ( application, Msg
+    , AuthorizeRequest, Role(..), authorize, AuthorizeResult(..), AuthorizeError, UserAuth, encodeUserAuth, decodeUserAuth
+    , authorizationUrl, redirectUriFromLocation, authorizationFromAccessToken, parseAuthorizeResult
+    , tokenRevoke
+    , Metadata(..), FileMetadata, FolderMetadata, DeletedMetadata
+    , download, DownloadRequest, DownloadResponse, DownloadError(..), LookupError(..)
+    , upload, UploadRequest, WriteMode(..), UploadError(..), UploadWriteFailed, WriteError(..)
+    , listFolder, listFolderContinue, ListFolderRequest, ListFolderResponse, ListFolderError(..), ListFolderContinueError(..)
+    , MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
+    )
 
 {-|
 
@@ -55,7 +18,7 @@ module Dropbox
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
 
-@docs program, programWithFlags, Msg
+@docs application, Msg
 
 
 ### Authorization
@@ -80,20 +43,19 @@ See the official Dropbox documentation at
 
 -}
 
-import Date exposing (Date)
-import Date.Format
+import Browser.Navigation
 import Dict exposing (Dict)
 import Html exposing (Html)
 import Http
+import Iso8601
 import Json.Decode
 import Json.Decode.Dropbox exposing (openUnion, optional, tagObject, tagValue, tagVoid, union)
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
-import Maybe.Extra
-import Navigation
 import Task exposing (Task)
-import Update.Extra
+import Time
+import Url exposing (Url)
 
 
 {-| Request parameters for Dropbox OAuth 2.0 authorization requests.
@@ -209,13 +171,13 @@ authorizationUrl request redirectUri =
         ]
 
 
-{-| Generate a redirect URI from a `Navigation.Location`.
+{-| Generate a redirect URI from a `Url`.
 
 Typically you will want to use `Dropbox.authorize`, which will do this automatically.
 You may want to use this if you need to manually manage the OAuth flow.
 
 -}
-redirectUriFromLocation : Navigation.Location -> String
+redirectUriFromLocation : Url -> String
 redirectUriFromLocation location =
     location.protocol
         ++ "//"
@@ -225,9 +187,9 @@ redirectUriFromLocation location =
 
 {-| <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 -}
-authorize : AuthorizeRequest -> Navigation.Location -> Cmd msg
+authorize : AuthorizeRequest -> Url -> Cmd msg
 authorize request location =
-    Navigation.load <|
+    Browser.Navigation.load <|
         authorizationUrl request (redirectUriFromLocation location)
 
 
@@ -237,7 +199,7 @@ Typically you will want to use [`Dropbox.program`](#program) instead, which will
 You may want to use this if you need to manually manage the OAuth flow.
 
 -}
-parseAuthorizeResult : Navigation.Location -> Maybe AuthorizeResult
+parseAuthorizeResult : Url -> Maybe AuthorizeResult
 parseAuthorizeResult location =
     let
         isKeyValue list =
@@ -290,11 +252,19 @@ parseAuthorizeResult location =
                             (Dict.get "state" dict)
                     )
                 |> Maybe.map DropboxAuthorizeErr
+
+        orElseLazy other value =
+            case value of
+                Nothing ->
+                    other ()
+
+                Just x ->
+                    x
     in
     case String.uncons location.hash of
         Just ( '#', hash ) ->
             makeAuth (params hash)
-                |> Maybe.Extra.orElseLazy (\() -> makeError (params hash))
+                |> orElseLazy (\() -> makeError (params hash))
 
         _ ->
             Nothing
@@ -403,6 +373,12 @@ tokenRevoke auth =
         }
 
 
+decodeDate : Json.Decode.Decoder Time.Posix
+decodeDate =
+    Json.Decode.string
+        |> Json.Decode.andThen Iso8601.toTime
+
+
 {-| Request parameteres for `download`
 
 Note: there is no `rev` field because it is deprecated.
@@ -424,8 +400,8 @@ type alias DownloadResponse =
     { content : String
     , name : String
     , id : String
-    , clientModified : Date
-    , serverModified : Date
+    , clientModified : Time.Posix
+    , serverModified : Time.Posix
     , rev : String
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
@@ -441,12 +417,12 @@ type alias DownloadResponse =
 
 decodeDownloadResponse : String -> Json.Decode.Decoder DownloadResponse
 decodeDownloadResponse content =
-    Pipeline.decode DownloadResponse
+    Json.Decode.succeed DownloadResponse
         |> Pipeline.hardcoded content
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
-        |> Pipeline.required "client_modified" Json.Decode.Extra.date
-        |> Pipeline.required "server_modified" Json.Decode.Extra.date
+        |> Pipeline.required "client_modified" decodeDate
+        |> Pipeline.required "server_modified" decodeDate
         |> Pipeline.required "rev" Json.Decode.string
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
@@ -521,8 +497,8 @@ download auth info =
             case err of
                 Http.BadStatus response ->
                     case Json.Decode.decodeString decodeDownloadError response.body of
-                        Ok err ->
-                            err
+                        Ok errValue ->
+                            errValue
 
                         Err _ ->
                             OtherDownloadFailure err
@@ -577,7 +553,7 @@ type alias UploadRequest =
     { path : String
     , mode : WriteMode
     , autorename : Bool
-    , clientModified : Maybe Date
+    , clientModified : Maybe Time.Posix
     , mute : Bool
     , content : String
     }
@@ -627,16 +603,16 @@ See <https://www.dropbox.com/developers/documentation/http/documentation#files-u
 type alias PhotoMetadata =
     { dimensions : Maybe Dimensions
     , location : Maybe GpsCoordinates
-    , timeTaken : Maybe Date
+    , timeTaken : Maybe Time.Posix
     }
 
 
 decodePhotoMetadata : Json.Decode.Decoder PhotoMetadata
 decodePhotoMetadata =
-    Pipeline.decode PhotoMetadata
+    Json.Decode.succeed PhotoMetadata
         |> optional "dimensions" decodeDimensions
         |> optional "location" decodeGpsCoordinates
-        |> optional "time_taken" Json.Decode.Extra.date
+        |> optional "time_taken" decodeDate
 
 
 {-| Metadata for a video.
@@ -650,17 +626,17 @@ since Elm currently does not provide a way to parse and represent 64-bit integer
 type alias VideoMetadata =
     { dimensions : Maybe Dimensions
     , location : Maybe GpsCoordinates
-    , timeTaken : Maybe Date
+    , timeTaken : Maybe Time.Posix
     , duration : Maybe Int -- XXX: should be UInt64
     }
 
 
 decodeVideoMetadata : Json.Decode.Decoder VideoMetadata
 decodeVideoMetadata =
-    Pipeline.decode VideoMetadata
+    Json.Decode.succeed VideoMetadata
         |> optional "dimensions" decodeDimensions
         |> optional "location" decodeGpsCoordinates
-        |> optional "time_taken" Json.Decode.Extra.date
+        |> optional "time_taken" decodeDate
         |> optional "duration" Json.Decode.int
 
 
@@ -680,7 +656,7 @@ type alias Dimensions =
 
 decodeDimensions : Json.Decode.Decoder Dimensions
 decodeDimensions =
-    Pipeline.decode Dimensions
+    Json.Decode.succeed Dimensions
         |> Pipeline.required "height" Json.Decode.int
         |> Pipeline.required "width" Json.Decode.int
 
@@ -698,7 +674,7 @@ type alias GpsCoordinates =
 
 decodeGpsCoordinates : Json.Decode.Decoder GpsCoordinates
 decodeGpsCoordinates =
-    Pipeline.decode GpsCoordinates
+    Json.Decode.succeed GpsCoordinates
         |> Pipeline.required "latitude" Json.Decode.float
         |> Pipeline.required "longitude" Json.Decode.float
 
@@ -717,7 +693,7 @@ type alias FileSharingInfo =
 
 decodeFileSharingInfo : Json.Decode.Decoder FileSharingInfo
 decodeFileSharingInfo =
-    Pipeline.decode FileSharingInfo
+    Json.Decode.succeed FileSharingInfo
         |> Pipeline.required "read_only" Json.Decode.bool
         |> Pipeline.required "parent_shared_folder_id" Json.Decode.string
         |> optional "modified_by" Json.Decode.string
@@ -738,11 +714,11 @@ decodePropertyGroup : Json.Decode.Decoder PropertyGroup
 decodePropertyGroup =
     let
         decodeField =
-            Json.Decode.map2 (,)
+            Json.Decode.map2 (\a b -> ( a, b ))
                 (Json.Decode.field "name" Json.Decode.string)
                 (Json.Decode.field "value" Json.Decode.string)
     in
-    Pipeline.decode PropertyGroup
+    Json.Decode.succeed PropertyGroup
         |> Pipeline.required "template_id" Json.Decode.string
         |> Pipeline.required "fields" (Json.Decode.map Dict.fromList <| Json.Decode.list decodeField)
 
@@ -756,8 +732,8 @@ since Elm currently does not provide a way to parse and represent 64-bit integer
 type alias FileMetadata =
     { name : String
     , id : String
-    , clientModified : Date
-    , serverModified : Date
+    , clientModified : Time.Posix
+    , serverModified : Time.Posix
     , rev : String
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
@@ -805,11 +781,11 @@ type Metadata
 
 decodeFileMetadata : Json.Decode.Decoder FileMetadata
 decodeFileMetadata =
-    Pipeline.decode FileMetadata
+    Json.Decode.succeed FileMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
-        |> Pipeline.required "client_modified" Json.Decode.Extra.date
-        |> Pipeline.required "server_modified" Json.Decode.Extra.date
+        |> Pipeline.required "client_modified" decodeDate
+        |> Pipeline.required "server_modified" decodeDate
         |> Pipeline.required "rev" Json.Decode.string
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
@@ -824,7 +800,7 @@ decodeFileMetadata =
 
 decodeFolderMetadata : Json.Decode.Decoder FolderMetadata
 decodeFolderMetadata =
-    Pipeline.decode FolderMetadata
+    Json.Decode.succeed FolderMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
@@ -837,7 +813,7 @@ decodeFolderMetadata =
 
 decodeDeletedMetadata : Json.Decode.Decoder DeletedMetadata
 decodeDeletedMetadata =
-    Pipeline.decode DeletedMetadata
+    Json.Decode.succeed DeletedMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
@@ -870,7 +846,7 @@ type alias UploadWriteFailed =
 
 decodeUploadWriteFailed : Json.Decode.Decoder UploadWriteFailed
 decodeUploadWriteFailed =
-    Pipeline.decode UploadWriteFailed
+    Json.Decode.succeed UploadWriteFailed
         |> Pipeline.required "reason" decodeWriteError
         |> Pipeline.required "upload_session_id" Json.Decode.string
 
@@ -939,9 +915,9 @@ upload auth info =
                         , Just ( "mode", encodeWriteModel info.mode )
                         , Just ( "autorename", Json.Encode.bool info.autorename )
                         , info.clientModified
-                            |> Maybe.map Date.Format.formatISO8601
+                            |> Maybe.map Iso8601.fromTime
                             |> Maybe.map Json.Encode.string
-                            |> Maybe.map ((,) "client_modified")
+                            |> Maybe.map (\b -> ( "client_modified", b ))
                         , Just ( "mute", Json.Encode.bool info.mute )
                         ]
 
@@ -949,8 +925,8 @@ upload auth info =
             case err of
                 Http.BadStatus response ->
                     case Json.Decode.decodeString decodeUploadError response.body of
-                        Ok err ->
-                            err
+                        Ok errValue ->
+                            errValue
 
                         Err _ ->
                             OtherUploadFailure err
@@ -1012,7 +988,7 @@ type alias ListFolderResponse =
 
 decodeListResponse : Json.Decode.Decoder ListFolderResponse
 decodeListResponse =
-    Pipeline.decode ListFolderResponse
+    Json.Decode.succeed ListFolderResponse
         |> Pipeline.required "entries"
             (Json.Decode.list
                 (Json.Decode.oneOf
@@ -1051,7 +1027,7 @@ listFolder auth options =
             case err of
                 Http.BadStatus response ->
                     case Json.Decode.decodeString decodeListError response.body of
-                        Ok err ->
+                        Ok errValue ->
                             err
 
                         Err _ ->
@@ -1117,8 +1093,8 @@ listFolderContinue auth cursorInfo =
             case err of
                 Http.BadStatus response ->
                     case Json.Decode.decodeString decodeListContinueError response.body of
-                        Ok err ->
-                            err
+                        Ok errValue ->
+                            errValue
 
                         Err _ ->
                             OtherListContinueFailure err
@@ -1147,47 +1123,24 @@ type Msg msg
 
 
 {-| This provides the simplest way to integrate Dropbox authentication.
-Using `Dropbox.program` will handle parsing the authentication response from the
+Using `Dropbox.application` will handle parsing the authentication response from the
 authentication redirect so that you don't have to do it manually.
 -}
-program :
-    { init : Navigation.Location -> ( model, Cmd msg )
+application :
+    { init : Url -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
     , onAuth : AuthorizeResult -> msg
     }
     -> Program Never model (Msg msg)
-program config =
-    let
-        configWithFlags =
-            navigationConfig <|
-                { config | init = \() -> config.init }
-    in
-        Navigation.program (always <| Msg Nothing) <|
-            { configWithFlags | init = configWithFlags.init () }
-
-
-{-| This provides the simplest way to integrate Dropbox authentication with
-flags. Using `Dropbox.programWithFlags` will handle parsing the authentication
-response from the authentication redirect so that you don't have to do it
-manually.
--}
-programWithFlags :
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    , onAuth : AuthorizeResult -> msg
-    }
-    -> Program flags model (Msg msg)
-programWithFlags config =
+application config =
     Navigation.programWithFlags (always <| Msg Nothing) <|
         navigationConfig config
 
 
 type alias NavigationConfig flags model msg =
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
+    { init : flags -> Url -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
@@ -1195,7 +1148,7 @@ type alias NavigationConfig flags model msg =
 
 
 navigationConfig :
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
+    { init : flags -> Url -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
     , view : model -> Html msg
