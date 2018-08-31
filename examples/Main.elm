@@ -1,4 +1,4 @@
-module Main exposing (..)
+module Main exposing (main)
 
 import BeautifulExample
 import Color
@@ -57,6 +57,7 @@ initialModel location =
     , clientId =
         if location.host == "avh4.github.io" then
             "cackwvfdggogoes"
+
         else
             ""
     , location = location
@@ -173,6 +174,7 @@ view model =
       ]
     , if String.trim model.clientId == "" then
         []
+
       else
         [ h3 [] [ text "Step 2: redirect to the auth URL" ]
         , p []
@@ -196,7 +198,7 @@ startAuth =
         , p []
             [ text "For this example, the redirect URL is "
             , code
-                [ style [ ( "word-break", "break-all" ) ] ]
+                [ style "word-break" "break-all" ]
                 [ text <| Dropbox.authorizationUrl (authRequest model) (Dropbox.redirectUriFromLocation model.location) ]
             , text " You can redirect there using this button:"
             ]

@@ -43,6 +43,7 @@ See the official Dropbox documentation at
 
 -}
 
+import Browser
 import Browser.Navigation
 import Dict exposing (Dict)
 import Html exposing (Html)
@@ -179,10 +180,19 @@ You may want to use this if you need to manually manage the OAuth flow.
 -}
 redirectUriFromLocation : Url -> String
 redirectUriFromLocation location =
-    location.protocol
+    let
+        protocol =
+            case location.protocol of
+                Url.Http ->
+                    "http:"
+
+                Url.Https ->
+                    "https:"
+    in
+    protocol
         ++ "//"
         ++ location.host
-        ++ location.pathname
+        ++ location.path
 
 
 {-| <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
@@ -259,14 +269,14 @@ parseAuthorizeResult location =
                     other ()
 
                 Just x ->
-                    x
+                    Just x
     in
-    case String.uncons location.hash of
-        Just ( '#', hash ) ->
+    case location.fragment of
+        Just hash ->
             makeAuth (params hash)
                 |> orElseLazy (\() -> makeError (params hash))
 
-        _ ->
+        Nothing ->
             Nothing
 
 
@@ -375,8 +385,18 @@ tokenRevoke auth =
 
 decodeDate : Json.Decode.Decoder Time.Posix
 decodeDate =
+    let
+        fromResult result =
+            case result of
+                Err _ ->
+                    Json.Decode.fail "Not a valid date"
+
+                Ok value ->
+                    Json.Decode.succeed value
+    in
     Json.Decode.string
-        |> Json.Decode.andThen Iso8601.toTime
+        |> Json.Decode.map Iso8601.toTime
+        |> Json.Decode.andThen fromResult
 
 
 {-| Request parameteres for `download`
@@ -487,6 +507,7 @@ download auth info =
 
                 Just arg ->
                     Json.Decode.decodeString (decodeDownloadResponse response.body) arg
+                        |> Result.mapError Json.Decode.errorToString
 
         dropboxArg =
             Json.Encode.encode 0 <|
@@ -1028,7 +1049,7 @@ listFolder auth options =
                 Http.BadStatus response ->
                     case Json.Decode.decodeString decodeListError response.body of
                         Ok errValue ->
-                            err
+                            errValue
 
                         Err _ ->
                             OtherListFailure err
@@ -1127,57 +1148,55 @@ Using `Dropbox.application` will handle parsing the authentication response from
 authentication redirect so that you don't have to do it manually.
 -}
 application :
-    { init : Url -> ( model, Cmd msg )
+    { init : flags -> Url -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
-    , view : model -> Html msg
+    , view : model -> Browser.Document msg
     , onAuth : AuthorizeResult -> msg
     }
-    -> Program Never model (Msg msg)
+    -> Program flags model (Msg msg)
 application config =
-    Navigation.programWithFlags (always <| Msg Nothing) <|
-        navigationConfig config
+    let
+        andThen : (msg -> model -> ( model, Cmd a )) -> msg -> ( model, Cmd a ) -> ( model, Cmd a )
+        andThen update msg ( model, cmd ) =
+            let
+                ( model_, cmd_ ) =
+                    update msg model
+            in
+            ( model_, Cmd.batch [ cmd, cmd_ ] )
+    in
+    Browser.application
+        { init =
+            \flags url key ->
+                case parseAuthorizeResult url of
+                    Nothing ->
+                        config.init flags url
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+
+                    Just response ->
+                        config.init flags url
+                            |> andThen
+                                config.update
+                                (config.onAuth response)
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+        , update =
+            \(Msg msg) model ->
+                case msg of
+                    Nothing ->
+                        ( model, Cmd.none )
+
+                    Just m ->
+                        config.update m model
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+        , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
+        , view = config.view >> mapDocument (Msg << Just)
+        , onUrlRequest = always <| Msg Nothing
+        , onUrlChange = always <| Msg Nothing
+        }
 
 
-type alias NavigationConfig flags model msg =
-    { init : flags -> Url -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    }
-
-
-navigationConfig :
-    { init : flags -> Url -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    , onAuth : AuthorizeResult -> msg
-    }
-    -> NavigationConfig flags model (Msg msg)
-navigationConfig config =
-    { init =
-        \flags location ->
-            case parseAuthorizeResult location of
-                Nothing ->
-                    config.init flags location
-                        |> Update.Extra.mapCmd (Msg << Just)
-
-                Just response ->
-                    config.init flags location
-                        |> Update.Extra.andThen
-                            config.update
-                            (config.onAuth response)
-                        |> Update.Extra.mapCmd (Msg << Just)
-    , update =
-        \(Msg msg) model ->
-            case msg of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just m ->
-                    config.update m model
-                        |> Update.Extra.mapCmd (Msg << Just)
-    , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
-    , view = config.view >> Html.map (Msg << Just)
+mapDocument : (a -> b) -> Browser.Document a -> Browser.Document b
+mapDocument f document =
+    { title = document.title
+    , body = List.map (Html.map f) document.body
     }

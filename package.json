@@ -4,6 +4,6 @@
     "elm-format": "^0.8.0"
   },
   "scripts": {
-    "test": "elm make --docs=documentation.json && (cd examples && elm make Main.elm --output ../docs/index.html) && elm-format --validate ."
+    "test": "elm make --docs=documentation.json && mkdir -p docs && (cd examples && elm make Main.elm --output ../docs/index.html) && elm-format --validate ."
   }
 }
