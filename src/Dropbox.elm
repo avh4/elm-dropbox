@@ -361,25 +361,40 @@ authHeader auth =
 See <https://www.dropbox.com/developers/documentation/http/documentation#auth-token-revoke>
 
 -}
-tokenRevoke : UserAuth -> Http.Request ()
+tokenRevoke : UserAuth -> Task Http.Error ()
 tokenRevoke auth =
     let
         url =
             "https://api.dropboxapi.com/2/auth/token/revoke"
 
-        parse response =
-            Ok ()
+        resolver =
+            Http.stringResolver <|
+                \response ->
+                    case response of
+                        Http.GoodStatus_ metadata body ->
+                            Ok ()
+
+                        Http.BadStatus_ metadata body ->
+                            Err (Http.BadStatus metadata.statusCode)
+
+                        Http.BadUrl_ message ->
+                            Err (Http.BadUrl message)
+
+                        Http.Timeout_ ->
+                            Err Http.Timeout
+
+                        Http.NetworkError_ ->
+                            Err Http.NetworkError
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
             ]
         , url = url
         , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
+        , resolver = resolver
         , timeout = Nothing
-        , withCredentials = False
         }
 
 
@@ -489,6 +504,71 @@ decodeLookupError =
         ]
 
 
+{-| The resolver decodes a JSON,
+and in the case of a bad status code, can decode an error value
+-}
+jsonBodyAndErrorResolver : Json.Decode.Decoder a -> Json.Decode.Decoder x -> (Http.Error -> x) -> Http.Resolver x a
+jsonBodyAndErrorResolver decoder errorDecoder httpError =
+    Http.stringResolver <|
+        \response ->
+            case response of
+                Http.GoodStatus_ metadata body ->
+                    Json.Decode.decodeString decoder body
+                        |> Result.mapError (Json.Decode.errorToString >> Http.BadBody >> httpError)
+
+                Http.BadStatus_ metadata body ->
+                    case Json.Decode.decodeString errorDecoder body of
+                        Ok errValue ->
+                            Err errValue
+
+                        Err _ ->
+                            Err (httpError (Http.BadStatus metadata.statusCode))
+
+                Http.BadUrl_ message ->
+                    Err (httpError (Http.BadUrl message))
+
+                Http.Timeout_ ->
+                    Err (httpError Http.Timeout)
+
+                Http.NetworkError_ ->
+                    Err (httpError Http.NetworkError)
+
+
+{-| The resolver decodes response data from the `dropbox-api-result` header,
+and in the case of a bad status code, can decode an error value
+-}
+dropboxApiResultResolver : (String -> Json.Decode.Decoder a) -> Json.Decode.Decoder x -> (Http.Error -> x) -> Http.Resolver x a
+dropboxApiResultResolver decoder errorDecoder httpError =
+    Http.stringResolver <|
+        \response ->
+            case response of
+                Http.GoodStatus_ metadata body ->
+                    case Dict.get "dropbox-api-result" metadata.headers of
+                        Nothing ->
+                            Err (httpError (Http.BadBody "No dropbox-api-result header found"))
+
+                        Just arg ->
+                            Json.Decode.decodeString (decoder body) arg
+                                |> Result.mapError (Json.Decode.errorToString >> Http.BadBody >> httpError)
+
+                Http.BadStatus_ metadata body ->
+                    case Json.Decode.decodeString errorDecoder body of
+                        Ok errValue ->
+                            Err errValue
+
+                        Err _ ->
+                            Err (httpError (Http.BadStatus metadata.statusCode))
+
+                Http.BadUrl_ message ->
+                    Err (httpError (Http.BadUrl message))
+
+                Http.Timeout_ ->
+                    Err (httpError Http.Timeout)
+
+                Http.NetworkError_ ->
+                    Err (httpError Http.NetworkError)
+
+
 {-| Download a file from a user's Dropbox.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
@@ -500,34 +580,12 @@ download auth info =
         url =
             "https://content.dropboxapi.com/2/files/download"
 
-        parse response =
-            case Dict.get "dropbox-api-result" response.headers of
-                Nothing ->
-                    Err "No dropbox-api-result header found"
-
-                Just arg ->
-                    Json.Decode.decodeString (decodeDownloadResponse response.body) arg
-                        |> Result.mapError Json.Decode.errorToString
-
         dropboxArg =
             Json.Encode.encode 0 <|
                 Json.Encode.object
                     [ ( "path", Json.Encode.string info.path ) ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeDownloadError response.body of
-                        Ok errValue ->
-                            errValue
-
-                        Err _ ->
-                            OtherDownloadFailure err
-
-                _ ->
-                    OtherDownloadFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
@@ -535,12 +593,9 @@ download auth info =
             ]
         , url = url
         , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
+        , resolver = dropboxApiResultResolver decodeDownloadResponse decodeDownloadError OtherDownloadFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| Your intent when writing a file to some path.
@@ -941,21 +996,8 @@ upload auth info =
                             |> Maybe.map (\b -> ( "client_modified", b ))
                         , Just ( "mute", Json.Encode.bool info.mute )
                         ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeUploadError response.body of
-                        Ok errValue ->
-                            errValue
-
-                        Err _ ->
-                            OtherUploadFailure err
-
-                _ ->
-                    OtherUploadFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
@@ -963,12 +1005,9 @@ upload auth info =
             ]
         , url = url
         , body = body
-        , expect = Http.expectJson decodeFileMetadata
+        , resolver = jsonBodyAndErrorResolver decodeFileMetadata decodeUploadError OtherUploadFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| Request parameters for `listFolder`
@@ -1043,32 +1082,16 @@ listFolder auth options =
                     , ( "include_deleted", Json.Encode.bool options.includeDeleted )
                     , ( "include_has_explicit_shared_members", Json.Encode.bool options.includeHasExplicitSharedMembers )
                     ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeListError response.body of
-                        Ok errValue ->
-                            errValue
-
-                        Err _ ->
-                            OtherListFailure err
-
-                _ ->
-                    OtherListFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth ]
         , url = url
         , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
+        , resolver = jsonBodyAndErrorResolver decodeListResponse decodeListError OtherListFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
@@ -1109,32 +1132,16 @@ listFolderContinue auth cursorInfo =
                 Json.Encode.object <|
                     [ ( "cursor", Json.Encode.string cursorInfo.cursor )
                     ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeListContinueError response.body of
-                        Ok errValue ->
-                            errValue
-
-                        Err _ ->
-                            OtherListContinueFailure err
-
-                _ ->
-                    OtherListContinueFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth ]
         , url = url
         , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
+        , resolver = jsonBodyAndErrorResolver decodeListResponse decodeListContinueError OtherListContinueFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| The message type for an app that uses `Dropbox.program`

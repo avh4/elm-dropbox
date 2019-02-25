@@ -1,15 +1,14 @@
 module Main exposing (main)
 
 import BeautifulExample
+import Browser.Navigation
 import Color
-import Date exposing (Date)
 import Debug.Control as Control exposing (Control)
 import Dropbox
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Http
-import Navigation
 import Task
 
 
