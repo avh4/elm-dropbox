@@ -1,51 +1,14 @@
-module Dropbox
-    exposing
-        ( AuthorizeError
-        , AuthorizeRequest
-        , AuthorizeResult(..)
-        , DeletedMetadata
-        , Dimensions
-        , DownloadError(..)
-        , DownloadRequest
-        , DownloadResponse
-        , FileMetadata
-        , FileSharingInfo
-        , FolderMetadata
-        , GpsCoordinates
-        , ListFolderContinueError(..)
-        , ListFolderError(..)
-        , ListFolderRequest
-        , ListFolderResponse
-        , LookupError(..)
-        , MediaInfo
-        , MediaMetadata
-        , Metadata(..)
-        , Msg
-        , PhotoMetadata
-        , PropertyGroup
-        , Role(..)
-        , UploadError(..)
-        , UploadRequest
-        , UploadWriteFailed
-        , UserAuth
-        , VideoMetadata
-        , WriteError(..)
-        , WriteMode(..)
-        , authorizationFromAccessToken
-        , authorizationUrl
-        , authorize
-        , decodeUserAuth
-        , download
-        , encodeUserAuth
-        , listFolder
-        , listFolderContinue
-        , parseAuthorizeResult
-        , program
-        , programWithFlags
-        , redirectUriFromLocation
-        , tokenRevoke
-        , upload
-        )
+module Dropbox exposing
+    ( application, Msg
+    , AuthorizeRequest, Role(..), authorize, AuthorizeResult(..), AuthorizeError, UserAuth, encodeUserAuth, decodeUserAuth
+    , authorizationUrl, redirectUriFromLocation, authorizationFromAccessToken, parseAuthorizeResult
+    , tokenRevoke
+    , Metadata(..), FileMetadata, FolderMetadata, DeletedMetadata
+    , download, DownloadRequest, DownloadResponse, DownloadError(..), LookupError(..)
+    , upload, UploadRequest, WriteMode(..), UploadError(..), UploadWriteFailed, WriteError(..)
+    , listFolder, listFolderContinue, ListFolderRequest, ListFolderResponse, ListFolderError(..), ListFolderContinueError(..)
+    , MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
+    )
 
 {-|
 
@@ -55,7 +18,7 @@ module Dropbox
 See the official Dropbox documentation at
 <https://www.dropbox.com/developers/documentation/http/documentation>
 
-@docs program, programWithFlags, Msg
+@docs application, Msg
 
 
 ### Authorization
@@ -80,20 +43,20 @@ See the official Dropbox documentation at
 
 -}
 
-import Date exposing (Date)
-import Date.Format
+import Browser
+import Browser.Navigation
 import Dict exposing (Dict)
 import Html exposing (Html)
 import Http
+import Iso8601
 import Json.Decode
 import Json.Decode.Dropbox exposing (openUnion, optional, tagObject, tagValue, tagVoid, union)
 import Json.Decode.Extra
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
-import Maybe.Extra
-import Navigation
 import Task exposing (Task)
-import Update.Extra
+import Time
+import Url exposing (Url)
 
 
 {-| Request parameters for Dropbox OAuth 2.0 authorization requests.
@@ -209,25 +172,43 @@ authorizationUrl request redirectUri =
         ]
 
 
-{-| Generate a redirect URI from a `Navigation.Location`.
+{-| Generate a redirect URI from a `Url`.
 
 Typically you will want to use `Dropbox.authorize`, which will do this automatically.
 You may want to use this if you need to manually manage the OAuth flow.
 
 -}
-redirectUriFromLocation : Navigation.Location -> String
+redirectUriFromLocation : Url -> String
 redirectUriFromLocation location =
-    location.protocol
+    let
+        protocol =
+            case location.protocol of
+                Url.Http ->
+                    "http:"
+
+                Url.Https ->
+                    "https:"
+
+        port_ =
+            case location.port_ of
+                Nothing ->
+                    ""
+
+                Just p ->
+                    ":" ++ String.fromInt p
+    in
+    protocol
         ++ "//"
         ++ location.host
-        ++ location.pathname
+        ++ port_
+        ++ location.path
 
 
 {-| <https://www.dropbox.com/developers/documentation/http/documentation#oauth2-authorize>
 -}
-authorize : AuthorizeRequest -> Navigation.Location -> Cmd msg
+authorize : AuthorizeRequest -> Url -> Cmd msg
 authorize request location =
-    Navigation.load <|
+    Browser.Navigation.load <|
         authorizationUrl request (redirectUriFromLocation location)
 
 
@@ -237,7 +218,7 @@ Typically you will want to use [`Dropbox.program`](#program) instead, which will
 You may want to use this if you need to manually manage the OAuth flow.
 
 -}
-parseAuthorizeResult : Navigation.Location -> Maybe AuthorizeResult
+parseAuthorizeResult : Url -> Maybe AuthorizeResult
 parseAuthorizeResult location =
     let
         isKeyValue list =
@@ -290,13 +271,21 @@ parseAuthorizeResult location =
                             (Dict.get "state" dict)
                     )
                 |> Maybe.map DropboxAuthorizeErr
-    in
-    case String.uncons location.hash of
-        Just ( '#', hash ) ->
-            makeAuth (params hash)
-                |> Maybe.Extra.orElseLazy (\() -> makeError (params hash))
 
-        _ ->
+        orElseLazy other value =
+            case value of
+                Nothing ->
+                    other ()
+
+                Just x ->
+                    Just x
+    in
+    case location.fragment of
+        Just hash ->
+            makeAuth (params hash)
+                |> orElseLazy (\() -> makeError (params hash))
+
+        Nothing ->
             Nothing
 
 
@@ -381,26 +370,57 @@ authHeader auth =
 See <https://www.dropbox.com/developers/documentation/http/documentation#auth-token-revoke>
 
 -}
-tokenRevoke : UserAuth -> Http.Request ()
+tokenRevoke : UserAuth -> Task Http.Error ()
 tokenRevoke auth =
     let
         url =
             "https://api.dropboxapi.com/2/auth/token/revoke"
 
-        parse response =
-            Ok ()
+        resolver =
+            Http.stringResolver <|
+                \response ->
+                    case response of
+                        Http.GoodStatus_ metadata body ->
+                            Ok ()
+
+                        Http.BadStatus_ metadata body ->
+                            Err (Http.BadStatus metadata.statusCode)
+
+                        Http.BadUrl_ message ->
+                            Err (Http.BadUrl message)
+
+                        Http.Timeout_ ->
+                            Err Http.Timeout
+
+                        Http.NetworkError_ ->
+                            Err Http.NetworkError
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
             ]
         , url = url
         , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
+        , resolver = resolver
         , timeout = Nothing
-        , withCredentials = False
         }
+
+
+decodeDate : Json.Decode.Decoder Time.Posix
+decodeDate =
+    let
+        fromResult result =
+            case result of
+                Err _ ->
+                    Json.Decode.fail "Not a valid date"
+
+                Ok value ->
+                    Json.Decode.succeed value
+    in
+    Json.Decode.string
+        |> Json.Decode.map Iso8601.toTime
+        |> Json.Decode.andThen fromResult
 
 
 {-| Request parameteres for `download`
@@ -424,8 +444,8 @@ type alias DownloadResponse =
     { content : String
     , name : String
     , id : String
-    , clientModified : Date
-    , serverModified : Date
+    , clientModified : Time.Posix
+    , serverModified : Time.Posix
     , rev : String
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
@@ -441,12 +461,12 @@ type alias DownloadResponse =
 
 decodeDownloadResponse : String -> Json.Decode.Decoder DownloadResponse
 decodeDownloadResponse content =
-    Pipeline.decode DownloadResponse
+    Json.Decode.succeed DownloadResponse
         |> Pipeline.hardcoded content
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
-        |> Pipeline.required "client_modified" Json.Decode.Extra.date
-        |> Pipeline.required "server_modified" Json.Decode.Extra.date
+        |> Pipeline.required "client_modified" decodeDate
+        |> Pipeline.required "server_modified" decodeDate
         |> Pipeline.required "rev" Json.Decode.string
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
@@ -493,6 +513,71 @@ decodeLookupError =
         ]
 
 
+{-| The resolver decodes a JSON,
+and in the case of a bad status code, can decode an error value
+-}
+jsonBodyAndErrorResolver : Json.Decode.Decoder a -> Json.Decode.Decoder x -> (Http.Error -> x) -> Http.Resolver x a
+jsonBodyAndErrorResolver decoder errorDecoder httpError =
+    Http.stringResolver <|
+        \response ->
+            case response of
+                Http.GoodStatus_ metadata body ->
+                    Json.Decode.decodeString decoder body
+                        |> Result.mapError (Json.Decode.errorToString >> Http.BadBody >> httpError)
+
+                Http.BadStatus_ metadata body ->
+                    case Json.Decode.decodeString errorDecoder body of
+                        Ok errValue ->
+                            Err errValue
+
+                        Err _ ->
+                            Err (httpError (Http.BadStatus metadata.statusCode))
+
+                Http.BadUrl_ message ->
+                    Err (httpError (Http.BadUrl message))
+
+                Http.Timeout_ ->
+                    Err (httpError Http.Timeout)
+
+                Http.NetworkError_ ->
+                    Err (httpError Http.NetworkError)
+
+
+{-| The resolver decodes response data from the `dropbox-api-result` header,
+and in the case of a bad status code, can decode an error value
+-}
+dropboxApiResultResolver : (String -> Json.Decode.Decoder a) -> Json.Decode.Decoder x -> (Http.Error -> x) -> Http.Resolver x a
+dropboxApiResultResolver decoder errorDecoder httpError =
+    Http.stringResolver <|
+        \response ->
+            case response of
+                Http.GoodStatus_ metadata body ->
+                    case Dict.get "dropbox-api-result" metadata.headers of
+                        Nothing ->
+                            Err (httpError (Http.BadBody "No dropbox-api-result header found"))
+
+                        Just arg ->
+                            Json.Decode.decodeString (decoder body) arg
+                                |> Result.mapError (Json.Decode.errorToString >> Http.BadBody >> httpError)
+
+                Http.BadStatus_ metadata body ->
+                    case Json.Decode.decodeString errorDecoder body of
+                        Ok errValue ->
+                            Err errValue
+
+                        Err _ ->
+                            Err (httpError (Http.BadStatus metadata.statusCode))
+
+                Http.BadUrl_ message ->
+                    Err (httpError (Http.BadUrl message))
+
+                Http.Timeout_ ->
+                    Err (httpError Http.Timeout)
+
+                Http.NetworkError_ ->
+                    Err (httpError Http.NetworkError)
+
+
 {-| Download a file from a user's Dropbox.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-download>
@@ -504,33 +589,12 @@ download auth info =
         url =
             "https://content.dropboxapi.com/2/files/download"
 
-        parse response =
-            case Dict.get "dropbox-api-result" response.headers of
-                Nothing ->
-                    Err "No dropbox-api-result header found"
-
-                Just arg ->
-                    Json.Decode.decodeString (decodeDownloadResponse response.body) arg
-
         dropboxArg =
             Json.Encode.encode 0 <|
                 Json.Encode.object
                     [ ( "path", Json.Encode.string info.path ) ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeDownloadError response.body of
-                        Ok err ->
-                            err
-
-                        Err _ ->
-                            OtherDownloadFailure err
-
-                _ ->
-                    OtherDownloadFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
@@ -538,12 +602,9 @@ download auth info =
             ]
         , url = url
         , body = Http.emptyBody
-        , expect = Http.expectStringResponse parse
+        , resolver = dropboxApiResultResolver decodeDownloadResponse decodeDownloadError OtherDownloadFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| Your intent when writing a file to some path.
@@ -577,7 +638,7 @@ type alias UploadRequest =
     { path : String
     , mode : WriteMode
     , autorename : Bool
-    , clientModified : Maybe Date
+    , clientModified : Maybe Time.Posix
     , mute : Bool
     , content : String
     }
@@ -627,16 +688,16 @@ See <https://www.dropbox.com/developers/documentation/http/documentation#files-u
 type alias PhotoMetadata =
     { dimensions : Maybe Dimensions
     , location : Maybe GpsCoordinates
-    , timeTaken : Maybe Date
+    , timeTaken : Maybe Time.Posix
     }
 
 
 decodePhotoMetadata : Json.Decode.Decoder PhotoMetadata
 decodePhotoMetadata =
-    Pipeline.decode PhotoMetadata
+    Json.Decode.succeed PhotoMetadata
         |> optional "dimensions" decodeDimensions
         |> optional "location" decodeGpsCoordinates
-        |> optional "time_taken" Json.Decode.Extra.date
+        |> optional "time_taken" decodeDate
 
 
 {-| Metadata for a video.
@@ -650,17 +711,17 @@ since Elm currently does not provide a way to parse and represent 64-bit integer
 type alias VideoMetadata =
     { dimensions : Maybe Dimensions
     , location : Maybe GpsCoordinates
-    , timeTaken : Maybe Date
+    , timeTaken : Maybe Time.Posix
     , duration : Maybe Int -- XXX: should be UInt64
     }
 
 
 decodeVideoMetadata : Json.Decode.Decoder VideoMetadata
 decodeVideoMetadata =
-    Pipeline.decode VideoMetadata
+    Json.Decode.succeed VideoMetadata
         |> optional "dimensions" decodeDimensions
         |> optional "location" decodeGpsCoordinates
-        |> optional "time_taken" Json.Decode.Extra.date
+        |> optional "time_taken" decodeDate
         |> optional "duration" Json.Decode.int
 
 
@@ -680,7 +741,7 @@ type alias Dimensions =
 
 decodeDimensions : Json.Decode.Decoder Dimensions
 decodeDimensions =
-    Pipeline.decode Dimensions
+    Json.Decode.succeed Dimensions
         |> Pipeline.required "height" Json.Decode.int
         |> Pipeline.required "width" Json.Decode.int
 
@@ -698,7 +759,7 @@ type alias GpsCoordinates =
 
 decodeGpsCoordinates : Json.Decode.Decoder GpsCoordinates
 decodeGpsCoordinates =
-    Pipeline.decode GpsCoordinates
+    Json.Decode.succeed GpsCoordinates
         |> Pipeline.required "latitude" Json.Decode.float
         |> Pipeline.required "longitude" Json.Decode.float
 
@@ -717,7 +778,7 @@ type alias FileSharingInfo =
 
 decodeFileSharingInfo : Json.Decode.Decoder FileSharingInfo
 decodeFileSharingInfo =
-    Pipeline.decode FileSharingInfo
+    Json.Decode.succeed FileSharingInfo
         |> Pipeline.required "read_only" Json.Decode.bool
         |> Pipeline.required "parent_shared_folder_id" Json.Decode.string
         |> optional "modified_by" Json.Decode.string
@@ -738,11 +799,11 @@ decodePropertyGroup : Json.Decode.Decoder PropertyGroup
 decodePropertyGroup =
     let
         decodeField =
-            Json.Decode.map2 (,)
+            Json.Decode.map2 (\a b -> ( a, b ))
                 (Json.Decode.field "name" Json.Decode.string)
                 (Json.Decode.field "value" Json.Decode.string)
     in
-    Pipeline.decode PropertyGroup
+    Json.Decode.succeed PropertyGroup
         |> Pipeline.required "template_id" Json.Decode.string
         |> Pipeline.required "fields" (Json.Decode.map Dict.fromList <| Json.Decode.list decodeField)
 
@@ -756,8 +817,8 @@ since Elm currently does not provide a way to parse and represent 64-bit integer
 type alias FileMetadata =
     { name : String
     , id : String
-    , clientModified : Date
-    , serverModified : Date
+    , clientModified : Time.Posix
+    , serverModified : Time.Posix
     , rev : String
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
@@ -805,11 +866,11 @@ type Metadata
 
 decodeFileMetadata : Json.Decode.Decoder FileMetadata
 decodeFileMetadata =
-    Pipeline.decode FileMetadata
+    Json.Decode.succeed FileMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
-        |> Pipeline.required "client_modified" Json.Decode.Extra.date
-        |> Pipeline.required "server_modified" Json.Decode.Extra.date
+        |> Pipeline.required "client_modified" decodeDate
+        |> Pipeline.required "server_modified" decodeDate
         |> Pipeline.required "rev" Json.Decode.string
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
@@ -824,7 +885,7 @@ decodeFileMetadata =
 
 decodeFolderMetadata : Json.Decode.Decoder FolderMetadata
 decodeFolderMetadata =
-    Pipeline.decode FolderMetadata
+    Json.Decode.succeed FolderMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> Pipeline.required "id" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
@@ -837,7 +898,7 @@ decodeFolderMetadata =
 
 decodeDeletedMetadata : Json.Decode.Decoder DeletedMetadata
 decodeDeletedMetadata =
-    Pipeline.decode DeletedMetadata
+    Json.Decode.succeed DeletedMetadata
         |> Pipeline.required "name" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
@@ -870,7 +931,7 @@ type alias UploadWriteFailed =
 
 decodeUploadWriteFailed : Json.Decode.Decoder UploadWriteFailed
 decodeUploadWriteFailed =
-    Pipeline.decode UploadWriteFailed
+    Json.Decode.succeed UploadWriteFailed
         |> Pipeline.required "reason" decodeWriteError
         |> Pipeline.required "upload_session_id" Json.Decode.string
 
@@ -939,26 +1000,13 @@ upload auth info =
                         , Just ( "mode", encodeWriteModel info.mode )
                         , Just ( "autorename", Json.Encode.bool info.autorename )
                         , info.clientModified
-                            |> Maybe.map Date.Format.formatISO8601
+                            |> Maybe.map Iso8601.fromTime
                             |> Maybe.map Json.Encode.string
-                            |> Maybe.map ((,) "client_modified")
+                            |> Maybe.map (\b -> ( "client_modified", b ))
                         , Just ( "mute", Json.Encode.bool info.mute )
                         ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeUploadError response.body of
-                        Ok err ->
-                            err
-
-                        Err _ ->
-                            OtherUploadFailure err
-
-                _ ->
-                    OtherUploadFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth
@@ -966,12 +1014,9 @@ upload auth info =
             ]
         , url = url
         , body = body
-        , expect = Http.expectJson decodeFileMetadata
+        , resolver = jsonBodyAndErrorResolver decodeFileMetadata decodeUploadError OtherUploadFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| Request parameters for `listFolder`
@@ -1012,7 +1057,7 @@ type alias ListFolderResponse =
 
 decodeListResponse : Json.Decode.Decoder ListFolderResponse
 decodeListResponse =
-    Pipeline.decode ListFolderResponse
+    Json.Decode.succeed ListFolderResponse
         |> Pipeline.required "entries"
             (Json.Decode.list
                 (Json.Decode.oneOf
@@ -1046,32 +1091,16 @@ listFolder auth options =
                     , ( "include_deleted", Json.Encode.bool options.includeDeleted )
                     , ( "include_has_explicit_shared_members", Json.Encode.bool options.includeHasExplicitSharedMembers )
                     ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeListError response.body of
-                        Ok err ->
-                            err
-
-                        Err _ ->
-                            OtherListFailure err
-
-                _ ->
-                    OtherListFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth ]
         , url = url
         , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
+        , resolver = jsonBodyAndErrorResolver decodeListResponse decodeListError OtherListFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder-continue>
@@ -1112,32 +1141,16 @@ listFolderContinue auth cursorInfo =
                 Json.Encode.object <|
                     [ ( "cursor", Json.Encode.string cursorInfo.cursor )
                     ]
-
-        decodeError err =
-            case err of
-                Http.BadStatus response ->
-                    case Json.Decode.decodeString decodeListContinueError response.body of
-                        Ok err ->
-                            err
-
-                        Err _ ->
-                            OtherListContinueFailure err
-
-                _ ->
-                    OtherListContinueFailure err
     in
-    Http.request
+    Http.task
         { method = "POST"
         , headers =
             [ authHeader auth ]
         , url = url
         , body = Http.stringBody "application/json" body
-        , expect = Http.expectJson decodeListResponse
+        , resolver = jsonBodyAndErrorResolver decodeListResponse decodeListContinueError OtherListContinueFailure
         , timeout = Nothing
-        , withCredentials = False
         }
-        |> Http.toTask
-        |> Task.mapError decodeError
 
 
 {-| The message type for an app that uses `Dropbox.program`
@@ -1147,84 +1160,59 @@ type Msg msg
 
 
 {-| This provides the simplest way to integrate Dropbox authentication.
-Using `Dropbox.program` will handle parsing the authentication response from the
+Using `Dropbox.application` will handle parsing the authentication response from the
 authentication redirect so that you don't have to do it manually.
 -}
-program :
-    { init : Navigation.Location -> ( model, Cmd msg )
+application :
+    { init : flags -> Url -> ( model, Cmd msg )
     , update : msg -> model -> ( model, Cmd msg )
     , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    , onAuth : AuthorizeResult -> msg
-    }
-    -> Program Never model (Msg msg)
-program config =
-    let
-        configWithFlags =
-            navigationConfig <|
-                { config | init = \() -> config.init }
-    in
-        Navigation.program (always <| Msg Nothing) <|
-            { configWithFlags | init = configWithFlags.init () }
-
-
-{-| This provides the simplest way to integrate Dropbox authentication with
-flags. Using `Dropbox.programWithFlags` will handle parsing the authentication
-response from the authentication redirect so that you don't have to do it
-manually.
--}
-programWithFlags :
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
+    , view : model -> Browser.Document msg
     , onAuth : AuthorizeResult -> msg
     }
     -> Program flags model (Msg msg)
-programWithFlags config =
-    Navigation.programWithFlags (always <| Msg Nothing) <|
-        navigationConfig config
+application config =
+    let
+        andThen : (msg -> model -> ( model, Cmd a )) -> msg -> ( model, Cmd a ) -> ( model, Cmd a )
+        andThen update msg ( model, cmd ) =
+            let
+                ( model_, cmd_ ) =
+                    update msg model
+            in
+            ( model_, Cmd.batch [ cmd, cmd_ ] )
+    in
+    Browser.application
+        { init =
+            \flags url key ->
+                case parseAuthorizeResult url of
+                    Nothing ->
+                        config.init flags url
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+
+                    Just response ->
+                        config.init flags url
+                            |> andThen
+                                config.update
+                                (config.onAuth response)
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+        , update =
+            \(Msg msg) model ->
+                case msg of
+                    Nothing ->
+                        ( model, Cmd.none )
+
+                    Just m ->
+                        config.update m model
+                            |> Tuple.mapSecond (Cmd.map (Msg << Just))
+        , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
+        , view = config.view >> mapDocument (Msg << Just)
+        , onUrlRequest = always <| Msg Nothing
+        , onUrlChange = always <| Msg Nothing
+        }
 
 
-type alias NavigationConfig flags model msg =
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    }
-
-
-navigationConfig :
-    { init : flags -> Navigation.Location -> ( model, Cmd msg )
-    , update : msg -> model -> ( model, Cmd msg )
-    , subscriptions : model -> Sub msg
-    , view : model -> Html msg
-    , onAuth : AuthorizeResult -> msg
-    }
-    -> NavigationConfig flags model (Msg msg)
-navigationConfig config =
-    { init =
-        \flags location ->
-            case parseAuthorizeResult location of
-                Nothing ->
-                    config.init flags location
-                        |> Update.Extra.mapCmd (Msg << Just)
-
-                Just response ->
-                    config.init flags location
-                        |> Update.Extra.andThen
-                            config.update
-                            (config.onAuth response)
-                        |> Update.Extra.mapCmd (Msg << Just)
-    , update =
-        \(Msg msg) model ->
-            case msg of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just m ->
-                    config.update m model
-                        |> Update.Extra.mapCmd (Msg << Just)
-    , subscriptions = config.subscriptions >> Sub.map (Msg << Just)
-    , view = config.view >> Html.map (Msg << Just)
+mapDocument : (a -> b) -> Browser.Document a -> Browser.Document b
+mapDocument f document =
+    { title = document.title
+    , body = List.map (Html.map f) document.body
     }

@@ -1,3 +1,5 @@
+[![Latest Version](https://img.shields.io/elm-package/v/avh4/elm-dropbox.svg?label=version)](https://package.elm-lang.org/packages/avh4/elm-dropbox/latest/)
+
 Unofficial [Dropbox](https://www.dropbox.com) API for [Elm](http://elm-lang.org/).
 
 
@@ -35,7 +37,7 @@ initialModel location =
 ```
 
 Dropbox authentication requires a "client id", also called the "app key".
-can be found on the Dropbox Developers page for your app. Links: your Dropbox apps, creat a new Dropbox app
+can be found on the Dropbox Developers page for your app. Links: your Dropbox apps, create a new Dropbox app
 You will need to get the client id/app key of your [existing app](https://www.dropbox.com/developers/apps),
 or [create a new app](https://www.dropbox.com/developers/apps/create).
 
