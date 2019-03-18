@@ -35,7 +35,7 @@ initialModel location =
 ```
 
 Dropbox authentication requires a "client id", also called the "app key".
-can be found on the Dropbox Developers page for your app. Links: your Dropbox apps, creat a new Dropbox app
+can be found on the Dropbox Developers page for your app. Links: your Dropbox apps, create a new Dropbox app
 You will need to get the client id/app key of your [existing app](https://www.dropbox.com/developers/apps),
 or [create a new app](https://www.dropbox.com/developers/apps/create).
 

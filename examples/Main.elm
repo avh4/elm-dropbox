@@ -10,6 +10,8 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Task
+import Time
+import Url exposing (Url)
 
 
 type alias Model =
@@ -18,19 +20,19 @@ type alias Model =
     , uploadRequest : Control Dropbox.UploadRequest
     , downloadRequest : Control Dropbox.DownloadRequest
     , clientId : String
-    , location : Navigation.Location
+    , location : Url
     , auth : Maybe Dropbox.UserAuth
     }
 
 
-initialModel : Navigation.Location -> Model
+initialModel : Url -> Model
 initialModel location =
     { debug = ""
     , authorizeRequest =
         Control.record Dropbox.AuthorizeRequest
             |> Control.field "clientId" (Control.value "(specified above in step 1)")
             |> Control.field "state" (Control.maybe False <| Control.string "")
-            |> Control.field "requireRole" (Control.maybe False <| Control.values [ Dropbox.Personal, Dropbox.Work ])
+            |> Control.field "requireRole" (Control.maybe False <| Control.values Debug.toString [ Dropbox.Personal, Dropbox.Work ])
             |> Control.field "forceReapprove" (Control.bool False)
             |> Control.field "disableSignup" (Control.bool False)
             |> Control.field "locale" (Control.maybe False <| Control.string "en")
@@ -47,7 +49,7 @@ initialModel location =
                 )
             |> Control.field "autorename" (Control.bool False)
             |> Control.field "clientModified"
-                (Control.maybe False <| Control.date <| Date.fromTime 0)
+                (Control.maybe False <| Control.date Time.utc <| Time.millisToPosix 0)
             |> Control.field "mute" (Control.bool False)
             |> Control.field "content" (Control.string "HELLO.")
     , downloadRequest =
@@ -97,24 +99,24 @@ update msg model =
 
         Authed (Dropbox.AuthorizeOk auth) ->
             { model | auth = Just auth.userAuth }
-                |> update (DebugResult <| toString <| msg)
+                |> update (DebugResult <| Debug.toString msg)
 
         Authed _ ->
             { model | auth = Nothing }
-                |> update (DebugResult <| toString <| msg)
+                |> update (DebugResult <| Debug.toString msg)
 
         WriteFile auth ->
             ( model
             , Dropbox.upload auth
                 (Control.currentValue model.uploadRequest)
-                |> Task.attempt (toString >> DebugResult)
+                |> Task.attempt (Debug.toString >> DebugResult)
             )
 
         ReadFile auth ->
             ( model
             , Dropbox.download auth
                 (Control.currentValue model.downloadRequest)
-                |> Task.attempt (toString >> DebugResult)
+                |> Task.attempt (Debug.toString >> DebugResult)
             )
 
         DebugResult result ->
@@ -139,7 +141,7 @@ update msg model =
         Logout auth ->
             ( model
             , Dropbox.tokenRevoke auth
-                |> Http.send LogoutResponse
+                |> Task.attempt LogoutResponse
             )
 
         LogoutResponse (Ok ()) ->
@@ -148,7 +150,7 @@ update msg model =
             )
 
         LogoutResponse (Err err) ->
-            update (DebugResult <| toString <| Err err) model
+            update (DebugResult <| Debug.toString <| Err err) model
 
 
 view : Model -> Html Msg
@@ -160,13 +162,13 @@ view model =
             , text "Links: "
             , a [ href "https://www.dropbox.com/developers/apps" ] [ text "your Dropbox apps" ]
             , text ", "
-            , a [ href "https://www.dropbox.com/developers/apps/create" ] [ text "creat a new Dropbox app" ]
+            , a [ href "https://www.dropbox.com/developers/apps/create" ] [ text "create a new Dropbox app" ]
             , p [] [ text "In code, you will hard-code the clientId into your app's source code. " ]
             , p [] [ text "In this example, you will need to enter it below:" ]
             ]
       , input
             [ onInput ChangeAppId
-            , defaultValue model.clientId
+            , value model.clientId
             , placeholder "clientId a.k.a., App key"
             ]
             []
@@ -215,7 +217,7 @@ startAuth =
         Just auth ->
             [ p []
                 [ text "Auth token: "
-                , code [] [ text <| toString model.auth ]
+                , code [] [ text <| Debug.toString model.auth ]
                 ]
             , h3 [] [ text "Step 3: Use the API" ]
             , p []
@@ -253,22 +255,27 @@ startAuth =
         |> div []
 
 
-main : Program Never Model (Dropbox.Msg Msg)
+main : Program () Model (Dropbox.Msg Msg)
 main =
-    Dropbox.program
-        { init = \location -> ( initialModel location, Cmd.none )
+    Dropbox.application
+        { init = \() location -> ( initialModel location, Cmd.none )
         , update = update
         , subscriptions = \_ -> Sub.none
         , view =
-            view
-                >> BeautifulExample.view
-                    { title = "elm-dropbox"
-                    , details =
-                        Just """Unofficial Dropbox API for Elm."""
-                    , color = Just <| Color.rgb 40 136 222
-                    , maxWidth = 600
-                    , githubUrl = Just "https://github.com/avh4/elm-dropbox"
-                    , documentationUrl = Just "http://package.elm-lang.org/packages/avh4/elm-dropbox/latest"
-                    }
+            \model ->
+                { title = "avh4/elm-dropbox example"
+                , body =
+                    [ view model
+                        |> BeautifulExample.view
+                            { title = "elm-dropbox"
+                            , details =
+                                Just """Unofficial Dropbox API for Elm."""
+                            , color = Just <| Color.rgb255 40 136 222
+                            , maxWidth = 600
+                            , githubUrl = Just "https://github.com/avh4/elm-dropbox"
+                            , documentationUrl = Just "http://package.elm-lang.org/packages/avh4/elm-dropbox/latest"
+                            }
+                    ]
+                }
         , onAuth = Authed
         }
