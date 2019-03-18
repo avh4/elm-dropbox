@@ -1,3 +1,5 @@
+[![Latest Version](https://img.shields.io/elm-package/v/avh4/elm-dropbox.svg?label=version)](https://package.elm-lang.org/packages/avh4/elm-dropbox/latest/)
+
 Unofficial [Dropbox](https://www.dropbox.com) API for [Elm](http://elm-lang.org/).
 
 
