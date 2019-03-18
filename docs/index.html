@@ -14415,14 +14415,12 @@ var author$project$Dropbox$DownloadResponse = function (content) {
 						return function (size) {
 							return function (pathLower) {
 								return function (pathDisplay) {
-									return function (parentSharedFolderId) {
-										return function (mediaInfo) {
-											return function (sharingInfo) {
-												return function (propertyGroups) {
-													return function (hasExplicitSharedMembers) {
-														return function (contentHash) {
-															return {clientModified: clientModified, content: content, contentHash: contentHash, hasExplicitSharedMembers: hasExplicitSharedMembers, id: id, mediaInfo: mediaInfo, name: name, parentSharedFolderId: parentSharedFolderId, pathDisplay: pathDisplay, pathLower: pathLower, propertyGroups: propertyGroups, rev: rev, serverModified: serverModified, sharingInfo: sharingInfo, size: size};
-														};
+									return function (mediaInfo) {
+										return function (sharingInfo) {
+											return function (propertyGroups) {
+												return function (hasExplicitSharedMembers) {
+													return function (contentHash) {
+														return {clientModified: clientModified, content: content, contentHash: contentHash, hasExplicitSharedMembers: hasExplicitSharedMembers, id: id, mediaInfo: mediaInfo, name: name, pathDisplay: pathDisplay, pathLower: pathLower, propertyGroups: propertyGroups, rev: rev, serverModified: serverModified, sharingInfo: sharingInfo, size: size};
 													};
 												};
 											};
@@ -14900,44 +14898,40 @@ var author$project$Dropbox$decodeDownloadResponse = function (content) {
 						author$project$Dropbox$decodeMediaInfo,
 						A3(
 							author$project$Json$Decode$Dropbox$optional,
-							'parent_shared_folder_id',
+							'path_display',
 							elm$json$Json$Decode$string,
 							A3(
 								author$project$Json$Decode$Dropbox$optional,
-								'path_display',
+								'path_lower',
 								elm$json$Json$Decode$string,
 								A3(
-									author$project$Json$Decode$Dropbox$optional,
-									'path_lower',
-									elm$json$Json$Decode$string,
+									NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
+									'size',
+									elm$json$Json$Decode$int,
 									A3(
 										NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-										'size',
-										elm$json$Json$Decode$int,
+										'rev',
+										elm$json$Json$Decode$string,
 										A3(
 											NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-											'rev',
-											elm$json$Json$Decode$string,
+											'server_modified',
+											author$project$Dropbox$decodeDate,
 											A3(
 												NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-												'server_modified',
+												'client_modified',
 												author$project$Dropbox$decodeDate,
 												A3(
 													NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-													'client_modified',
-													author$project$Dropbox$decodeDate,
+													'id',
+													elm$json$Json$Decode$string,
 													A3(
 														NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-														'id',
+														'name',
 														elm$json$Json$Decode$string,
-														A3(
-															NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-															'name',
-															elm$json$Json$Decode$string,
-															A2(
-																NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$hardcoded,
-																content,
-																elm$json$Json$Decode$succeed(author$project$Dropbox$DownloadResponse))))))))))))))));
+														A2(
+															NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$hardcoded,
+															content,
+															elm$json$Json$Decode$succeed(author$project$Dropbox$DownloadResponse)))))))))))))));
 };
 var elm$http$Http$BadBody = function (a) {
 	return {$: 'BadBody', a: a};
@@ -15510,14 +15504,12 @@ var author$project$Dropbox$FileMetadata = function (name) {
 					return function (size) {
 						return function (pathLower) {
 							return function (pathDisplay) {
-								return function (parentSharedFolderId) {
-									return function (mediaInfo) {
-										return function (sharingInfo) {
-											return function (propertyGroups) {
-												return function (hasExplicitSharedMembers) {
-													return function (contentHash) {
-														return {clientModified: clientModified, contentHash: contentHash, hasExplicitSharedMembers: hasExplicitSharedMembers, id: id, mediaInfo: mediaInfo, name: name, parentSharedFolderId: parentSharedFolderId, pathDisplay: pathDisplay, pathLower: pathLower, propertyGroups: propertyGroups, rev: rev, serverModified: serverModified, sharingInfo: sharingInfo, size: size};
-													};
+								return function (mediaInfo) {
+									return function (sharingInfo) {
+										return function (propertyGroups) {
+											return function (hasExplicitSharedMembers) {
+												return function (contentHash) {
+													return {clientModified: clientModified, contentHash: contentHash, hasExplicitSharedMembers: hasExplicitSharedMembers, id: id, mediaInfo: mediaInfo, name: name, pathDisplay: pathDisplay, pathLower: pathLower, propertyGroups: propertyGroups, rev: rev, serverModified: serverModified, sharingInfo: sharingInfo, size: size};
 												};
 											};
 										};
@@ -15553,41 +15545,37 @@ var author$project$Dropbox$decodeFileMetadata = A3(
 					author$project$Dropbox$decodeMediaInfo,
 					A3(
 						author$project$Json$Decode$Dropbox$optional,
-						'parent_shared_folder_id',
+						'path_display',
 						elm$json$Json$Decode$string,
 						A3(
 							author$project$Json$Decode$Dropbox$optional,
-							'path_display',
+							'path_lower',
 							elm$json$Json$Decode$string,
 							A3(
-								author$project$Json$Decode$Dropbox$optional,
-								'path_lower',
-								elm$json$Json$Decode$string,
+								NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
+								'size',
+								elm$json$Json$Decode$int,
 								A3(
 									NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-									'size',
-									elm$json$Json$Decode$int,
+									'rev',
+									elm$json$Json$Decode$string,
 									A3(
 										NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-										'rev',
-										elm$json$Json$Decode$string,
+										'server_modified',
+										author$project$Dropbox$decodeDate,
 										A3(
 											NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-											'server_modified',
+											'client_modified',
 											author$project$Dropbox$decodeDate,
 											A3(
 												NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-												'client_modified',
-												author$project$Dropbox$decodeDate,
+												'id',
+												elm$json$Json$Decode$string,
 												A3(
 													NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-													'id',
+													'name',
 													elm$json$Json$Decode$string,
-													A3(
-														NoRedInk$elm_json_decode_pipeline$Json$Decode$Pipeline$required,
-														'name',
-														elm$json$Json$Decode$string,
-														elm$json$Json$Decode$succeed(author$project$Dropbox$FileMetadata)))))))))))))));
+													elm$json$Json$Decode$succeed(author$project$Dropbox$FileMetadata))))))))))))));
 var author$project$Dropbox$OtherUploadError = F2(
 	function (a, b) {
 		return {$: 'OtherUploadError', a: a, b: b};
