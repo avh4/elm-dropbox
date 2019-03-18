@@ -188,10 +188,19 @@ redirectUriFromLocation location =
 
                 Url.Https ->
                     "https:"
+
+        port_ =
+            case location.port_ of
+                Nothing ->
+                    ""
+
+                Just p ->
+                    ":" ++ String.fromInt p
     in
     protocol
         ++ "//"
         ++ location.host
+        ++ port_
         ++ location.path
 
 
