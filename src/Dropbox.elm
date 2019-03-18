@@ -450,7 +450,6 @@ type alias DownloadResponse =
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
     , pathDisplay : Maybe String
-    , parentSharedFolderId : Maybe String
     , mediaInfo : Maybe MediaInfo
     , sharingInfo : Maybe FileSharingInfo
     , propertyGroups : Maybe (List PropertyGroup)
@@ -471,7 +470,6 @@ decodeDownloadResponse content =
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
-        |> optional "parent_shared_folder_id" Json.Decode.string
         |> optional "media_info" decodeMediaInfo
         |> optional "sharing_info" decodeFileSharingInfo
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
@@ -847,7 +845,6 @@ type alias FileMetadata =
     , size : Int -- XXX: should be UInt64
     , pathLower : Maybe String
     , pathDisplay : Maybe String
-    , parentSharedFolderId : Maybe String
     , mediaInfo : Maybe MediaInfo
     , sharingInfo : Maybe FileSharingInfo
     , propertyGroups : Maybe (List PropertyGroup)
@@ -863,8 +860,6 @@ type alias FolderMetadata =
     , id : String
     , pathLower : Maybe String
     , pathDisplay : Maybe String
-    , parentSharedFolderId : Maybe String
-    , sharedFolderId : Maybe String
     , sharingInfo : Maybe FolderSharingInfo
     , propertyGroups : Maybe (List PropertyGroup)
     }
@@ -876,7 +871,6 @@ type alias DeletedMetadata =
     { name : String
     , pathLower : Maybe String
     , pathDisplay : Maybe String
-    , parentSharedFolderId : Maybe String
     }
 
 
@@ -899,7 +893,6 @@ decodeFileMetadata =
         |> Pipeline.required "size" Json.Decode.int
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
-        |> optional "parent_shared_folder_id" Json.Decode.string
         |> optional "media_info" decodeMediaInfo
         |> optional "sharing_info" decodeFileSharingInfo
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
@@ -914,8 +907,6 @@ decodeFolderMetadata =
         |> Pipeline.required "id" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
-        |> optional "parent_shared_folder_id" Json.Decode.string
-        |> optional "shared_folder_id" Json.Decode.string
         |> optional "sharing_info" decodeFolderSharingInfo
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
 
@@ -926,7 +917,6 @@ decodeDeletedMetadata =
         |> Pipeline.required "name" Json.Decode.string
         |> optional "path_lower" Json.Decode.string
         |> optional "path_display" Json.Decode.string
-        |> optional "parent_shared_folder_id" Json.Decode.string
 
 
 {-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
