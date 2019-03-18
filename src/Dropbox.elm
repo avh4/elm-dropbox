@@ -784,6 +784,30 @@ decodeFileSharingInfo =
         |> optional "modified_by" Json.Decode.string
 
 
+{-| Sharing info for a folder which is contained by a shared folder.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder>
+
+-}
+type alias FolderSharingInfo =
+    { readOnly : Bool
+    , parentSharedFolderId : Maybe String
+    , sharedFolderId : Maybe String
+    , traverseOnly : Bool
+    , noAccess : Bool
+    }
+
+
+decodeFolderSharingInfo : Json.Decode.Decoder FolderSharingInfo
+decodeFolderSharingInfo =
+    Json.Decode.succeed FolderSharingInfo
+        |> Pipeline.required "read_only" Json.Decode.bool
+        |> optional "parent_shared_folder_id" Json.Decode.string
+        |> optional "shared_folder_id" Json.Decode.string
+        |> Pipeline.optional "traverse_only" Json.Decode.bool False
+        |> Pipeline.optional "no_access" Json.Decode.bool False
+
+
 {-| Collection of custom properties in filled property templates.
 
 See <https://www.dropbox.com/developers/documentation/http/documentation#files-upload>
@@ -841,7 +865,7 @@ type alias FolderMetadata =
     , pathDisplay : Maybe String
     , parentSharedFolderId : Maybe String
     , sharedFolderId : Maybe String
-    , sharingInfo : Maybe FileSharingInfo
+    , sharingInfo : Maybe FolderSharingInfo
     , propertyGroups : Maybe (List PropertyGroup)
     }
 
@@ -892,7 +916,7 @@ decodeFolderMetadata =
         |> optional "path_display" Json.Decode.string
         |> optional "parent_shared_folder_id" Json.Decode.string
         |> optional "shared_folder_id" Json.Decode.string
-        |> optional "sharing_info" decodeFileSharingInfo
+        |> optional "sharing_info" decodeFolderSharingInfo
         |> optional "property_groups" (Json.Decode.list decodePropertyGroup)
 
 
@@ -1060,10 +1084,10 @@ decodeListResponse =
     Json.Decode.succeed ListFolderResponse
         |> Pipeline.required "entries"
             (Json.Decode.list
-                (Json.Decode.oneOf
-                    [ Json.Decode.map FileMeta decodeFileMetadata
-                    , Json.Decode.map FolderMeta decodeFolderMetadata
-                    , Json.Decode.map DeletedMeta decodeDeletedMetadata
+                (union
+                    [ tagObject "file" FileMeta decodeFileMetadata
+                    , tagObject "folder" FolderMeta decodeFolderMetadata
+                    , tagObject "deleted" DeletedMeta decodeDeletedMetadata
                     ]
                 )
             )
