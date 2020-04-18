@@ -1188,7 +1188,7 @@ delete auth info =
                     List.filterMap identity
                         [ Just ( "path", Json.Encode.string info.path )
                         , info.parentRev
-                            |> Maybe.map (\rev -> ("parent_rev", Json.Encode.string rev))
+                            |> Maybe.map (\rev -> ( "parent_rev", Json.Encode.string rev ))
                         ]
     in
     Http.task
