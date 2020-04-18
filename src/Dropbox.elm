@@ -7,6 +7,7 @@ module Dropbox exposing
     , download, DownloadRequest, DownloadResponse, DownloadError(..), LookupError(..)
     , upload, UploadRequest, WriteMode(..), UploadError(..), UploadWriteFailed, WriteError(..)
     , listFolder, listFolderContinue, ListFolderRequest, ListFolderResponse, ListFolderError(..), ListFolderContinueError(..)
+    , delete, DeleteRequest, DeleteError(..)
     , MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
     )
 
@@ -38,6 +39,7 @@ See the official Dropbox documentation at
 @docs download, DownloadRequest, DownloadResponse, DownloadError, LookupError
 @docs upload, UploadRequest, WriteMode, UploadError, UploadWriteFailed, WriteError
 @docs listFolder, listFolderContinue, ListFolderRequest, ListFolderResponse, ListFolderError, ListFolderContinueError
+@docs delete, DeleteRequest, DeleteError
 
 @docs MediaInfo, MediaMetadata, PhotoMetadata, VideoMetadata, Dimensions, GpsCoordinates, FileSharingInfo, PropertyGroup
 
@@ -1073,16 +1075,18 @@ decodeListResponse : Json.Decode.Decoder ListFolderResponse
 decodeListResponse =
     Json.Decode.succeed ListFolderResponse
         |> Pipeline.required "entries"
-            (Json.Decode.list
-                (union
-                    [ tagObject "file" FileMeta decodeFileMetadata
-                    , tagObject "folder" FolderMeta decodeFolderMetadata
-                    , tagObject "deleted" DeletedMeta decodeDeletedMetadata
-                    ]
-                )
-            )
+            (Json.Decode.list decodeMetadata)
         |> Pipeline.required "cursor" Json.Decode.string
         |> Pipeline.required "has_more" Json.Decode.bool
+
+
+decodeMetadata : Json.Decode.Decoder Metadata
+decodeMetadata =
+    union
+        [ tagObject "file" FileMeta decodeFileMetadata
+        , tagObject "folder" FolderMeta decodeFolderMetadata
+        , tagObject "deleted" DeletedMeta decodeDeletedMetadata
+        ]
 
 
 {-| Begin listing the contents of a folder.
@@ -1165,6 +1169,69 @@ listFolderContinue auth cursorInfo =
         , resolver = jsonBodyAndErrorResolver decodeListResponse decodeListContinueError OtherListContinueFailure
         , timeout = Nothing
         }
+
+
+{-| Delete the file or folder at a given path.
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-delete>
+
+-}
+delete : UserAuth -> DeleteRequest -> Task DeleteError Metadata
+delete auth info =
+    let
+        url =
+            "https://api.dropboxapi.com/2/files/delete_v2"
+
+        body =
+            Http.jsonBody <|
+                Json.Encode.object <|
+                    List.filterMap identity
+                        [ Just ( "path", Json.Encode.string info.path )
+                        , info.parentRev
+                            |> Maybe.map (\rev -> ( "parent_rev", Json.Encode.string rev ))
+                        ]
+    in
+    Http.task
+        { method = "POST"
+        , headers = [ authHeader auth ]
+        , url = url
+        , body = body
+        , resolver = jsonBodyAndErrorResolver decodeMetadata decodeDeleteError OtherDeleteFailure
+        , timeout = Nothing
+        }
+
+
+{-| Request parameteres for `delete`
+
+See <https://www.dropbox.com/developers/documentation/http/documentation#files-delete>
+
+-}
+type alias DeleteRequest =
+    { path : String
+    , parentRev : Maybe String
+    }
+
+
+{-| See <https://www.dropbox.com/developers/documentation/http/documentation#files-delete>
+-}
+type DeleteError
+    = PathLookup LookupError
+    | PathWrite WriteError
+    | TooManyWriteOperations
+    | TooManyFiles
+    | OtherDeleteError String Json.Encode.Value
+    | OtherDeleteFailure Http.Error
+
+
+decodeDeleteError : Json.Decode.Decoder DeleteError
+decodeDeleteError =
+    Json.Decode.field "error" <|
+        openUnion OtherDeleteError
+            [ tagObject "path_lookup" PathLookup decodeLookupError
+            , tagObject "path_write" PathWrite decodeWriteError
+            , tagVoid "too_many_write_operations" TooManyWriteOperations
+            , tagVoid "too_many_files" TooManyFiles
+            ]
 
 
 {-| The message type for an app that uses `Dropbox.program`
